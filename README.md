@@ -19,7 +19,7 @@ This plugin does not add agent tools, read session content, or copy conversation
 ## Install
 
 ```sh
-dsh plugin --profile web add github:Unintendedz/dsh-ui-enhancements#v0.1.0
+dsh plugin --profile web add github:Unintendedz/dsh-ui-enhancements#v0.1.1
 ```
 
 Restart the DSH Web service after installing or removing the plugin.

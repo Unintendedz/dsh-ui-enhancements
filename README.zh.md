@@ -19,7 +19,7 @@
 ## 安装
 
 ```sh
-dsh plugin --profile web add github:Unintendedz/dsh-ui-enhancements#v0.1.0
+dsh plugin --profile web add github:Unintendedz/dsh-ui-enhancements#v0.1.1
 ```
 
 安装或卸载后请重启 DSH Web 服务。
