@@ -1,5 +1,7 @@
 # dsh-ui-enhancements
 
+English | [中文](./README.zh.md)
+
 Small, focused UI enhancements for DeepSeek Harness.
 
 ## Current enhancement

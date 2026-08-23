@@ -1,5 +1,7 @@
 # dsh-ui-enhancements
 
+[English](./README.md) | 中文
+
 为 DeepSeek Harness 提供独立、克制的小型界面增强。
 
 ## 当前功能
