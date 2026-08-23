@@ -1,0 +1,4 @@
+# Mount the host marker; package metadata discovers the web client entry.
+- insert:
+    - id: dsh-ui-enhancements
+      name: dsh-ui-enhancements

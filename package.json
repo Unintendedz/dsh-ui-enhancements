@@ -1,0 +1,56 @@
+{
+  "name": "dsh-ui-enhancements",
+  "version": "0.1.0",
+  "description": "Small, focused UI enhancements for DeepSeek Harness",
+  "main": "lib/index.js",
+  "scripts": {
+    "test": "npm run build && node --test tests/*.mjs",
+    "build": "node scripts/build-client.mjs"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "plugin",
+    "ui-enhancements",
+    "session-management"
+  ],
+  "author": "Unintended",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Unintendedz/dsh-ui-enhancements.git"
+  },
+  "homepage": "https://github.com/Unintendedz/dsh-ui-enhancements#readme",
+  "bugs": {
+    "url": "https://github.com/Unintendedz/dsh-ui-enhancements/issues"
+  },
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-locale"
+      ]
+    }
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md",
+    "README.zh.md"
+  ],
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  },
+  "sideEffects": [
+    "./lib/client.js"
+  ]
+}
