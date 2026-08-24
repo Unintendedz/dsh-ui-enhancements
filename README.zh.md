@@ -6,6 +6,20 @@
 
 ## 当前功能
 
+### 配置档插件开关
+
+打开 **设置 → 插件 → 插件列表**，即可启用或停用当前 DSH 配置档中安装的每个插件包。
+
+- 修改会立即应用到当前 Loader，并在 DSH 重启后继续生效。
+- 选择结果保存在该配置档 `cordis.patch.yml` 的托管区块中，不会改动用户的其他 YAML 配置。
+- `dsh-ui-enhancements` 自身的开关保持可见但锁定为启用，避免恢复入口停用自己。
+- DSH 内置运行组件仍然只读，因为停用核心服务可能导致 Web 界面或插件管理器不可用。
+- 如果运行时更新失败，插件会恢复原有持久化状态，开关仍可重试。
+
+插件开关需要 DSH `0.1.1-rc.2`，或兼容的更新版 `0.1.x`。
+
+### 会话快捷操作
+
 悬停已有内容的会话行时，在原生菜单旁直接显示 **置顶/取消置顶** 和 **归档**。
 
 - 置顶会话保持在当前工作区分组或单列表顶部。
@@ -19,7 +33,7 @@
 ## 安装
 
 ```sh
-dsh plugin --profile web add github:Unintendedz/dsh-ui-enhancements#v0.1.1
+dsh plugin --profile web add github:Unintendedz/dsh-ui-enhancements#v0.2.0
 ```
 
 安装或卸载后请重启 DSH Web 服务。

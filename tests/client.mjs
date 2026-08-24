@@ -44,6 +44,9 @@ function actionElement(tagName = 'span') {
         if (selector === '[data-dsh-ui-enhancements-actions]') {
           return candidate.hasAttribute('data-dsh-ui-enhancements-actions')
         }
+        if (selector === '[data-dsh-ui-enhancements-plugin-toggle]') {
+          return candidate.hasAttribute('data-dsh-ui-enhancements-plugin-toggle')
+        }
         return false
       }
       const visit = (candidate) => {
@@ -80,6 +83,18 @@ function actionElement(tagName = 'span') {
     },
   })
   return element
+}
+
+function pluginCard() {
+  const documentApi = {
+    createElement: tag => actionElement(tag),
+  }
+  const card = actionElement('li')
+  card.ownerDocument = documentApi
+  card.setAttribute('data-plugin-entry', 'plugin-a-entry')
+  const header = actionElement('button')
+  card.appendChild(header)
+  return { card, header }
 }
 
 function quickActionRow() {
@@ -231,6 +246,121 @@ test('row quick actions expose pin state and reuse the native archive action', a
   assert.deepEqual(archived, ['session-row'])
 })
 
+test('plugin card switch exposes state and persists the requested opposite state', async () => {
+  const client = await loadClient()
+  const { card, header } = pluginCard()
+  const requests = []
+  const plugin = {
+    entryId: 'plugin-a-entry',
+    moduleName: 'plugin-a',
+    version: '1.2.3',
+    enabled: true,
+    locked: false,
+  }
+  const t = (key, params = {}) => `${key}:${params.name ?? ''}`
+
+  assert.equal(typeof client.mountPluginToggle, 'function')
+  assert.equal(client.mountPluginToggle(card, plugin, t, async (entryId, enabled) => {
+    requests.push({ entryId, enabled })
+    return { entryId, enabled }
+  }), true)
+
+  const toggle = card.querySelector('[data-dsh-ui-enhancements-plugin-toggle]')
+  assert.equal(toggle.getAttribute('role'), 'switch')
+  assert.equal(toggle.getAttribute('aria-checked'), 'true')
+  assert.equal(toggle.getAttribute('aria-label'), 'plugin.disable:plugin-a')
+  assert.equal(header.classList.contains('dsh-ui-enhancements-plugin-card-header'), true)
+
+  const event = await toggle.dispatch('click')
+  assert.equal(event.defaultPrevented, true)
+  assert.equal(event.propagationStopped, true)
+  assert.deepEqual(requests, [{ entryId: 'plugin-a-entry', enabled: false }])
+  assert.equal(toggle.getAttribute('aria-checked'), 'false')
+  assert.equal(toggle.getAttribute('aria-label'), 'plugin.enable:plugin-a')
+  assert.equal(toggle.disabled, false)
+})
+
+test('plugin manager keeps its own switch visible but locked', async () => {
+  const client = await loadClient()
+  const { card } = pluginCard()
+  client.mountPluginToggle(card, {
+    entryId: 'manager',
+    moduleName: 'dsh-ui-enhancements',
+    version: '0.2.0',
+    enabled: true,
+    locked: true,
+  }, (key, params = {}) => `${key}:${params.name ?? ''}`, async () => {
+    throw new Error('locked switch must not call the host')
+  })
+
+  const toggle = card.querySelector('[data-dsh-ui-enhancements-plugin-toggle]')
+  assert.equal(toggle.disabled, true)
+  assert.equal(toggle.getAttribute('aria-checked'), 'true')
+  assert.equal(toggle.getAttribute('aria-label'), 'plugin.locked:dsh-ui-enhancements')
+})
+
+test('inventory DOM refresh cannot unlock a plugin switch while its update is pending', async () => {
+  const client = await loadClient()
+  const { card } = pluginCard()
+  const plugin = {
+    entryId: 'plugin-a-entry',
+    moduleName: 'plugin-a',
+    version: '1.2.3',
+    enabled: true,
+    locked: false,
+  }
+  let resolveUpdate
+  const update = new Promise(resolve => { resolveUpdate = resolve })
+  const action = async () => update
+  const t = key => key
+
+  client.mountPluginToggle(card, plugin, t, action)
+  const toggle = card.querySelector('[data-dsh-ui-enhancements-plugin-toggle]')
+  const pending = toggle.dispatch('click')
+  assert.equal(toggle.disabled, true)
+  assert.equal(toggle.dataset.status, 'pending')
+
+  client.mountPluginToggle(card, plugin, t, action)
+  assert.equal(toggle.disabled, true)
+
+  resolveUpdate({ entryId: plugin.entryId, enabled: false })
+  await pending
+  assert.equal(toggle.disabled, false)
+})
+
+test('plugin toggle inventory failure is reported without breaking the page', async () => {
+  const client = await loadClient()
+  const warnings = []
+  const previousWarn = console.warn
+  console.warn = (...args) => { warnings.push(args) }
+  const documentApi = {
+    body: {},
+    querySelectorAll: () => [],
+  }
+  class FakeMutationObserver {
+    observe() {}
+    disconnect() {}
+  }
+
+  try {
+    const cleanup = client.installPluginToggles(
+      key => key,
+      {
+        async list() { throw new Error('remote unavailable') },
+        async setEnabled() { throw new Error('unexpected toggle') },
+      },
+      documentApi,
+      FakeMutationObserver,
+    )
+    await new Promise(resolve => setTimeout(resolve, 0))
+    assert.equal(warnings.length, 1)
+    assert.match(String(warnings[0][0]), /plugin switches unavailable/)
+    cleanup()
+  } finally {
+    console.warn = previousWarn
+  }
+})
+
 test('refreshing an unchanged row reuses action DOM and updates renamed labels', async () => {
   const client = await loadClient()
   const { row, actionHost } = quickActionRow()
@@ -366,6 +496,9 @@ test('client apply registers bilingual copy and starts the sidebar enhancer', as
     MutationObserver: globalThis.MutationObserver,
   }
   const registrations = []
+  const effects = []
+  const remoteMounts = []
+  const serviceLookups = []
   let observed = false
   globalThis.window = {
     localStorage: { getItem: () => null, setItem() {} },
@@ -384,7 +517,19 @@ test('client apply registers bilingual copy and starts the sidebar enhancer', as
     disconnect() {}
   }
   const ctx = {
-    effect(start) { return start() },
+    get(service) {
+      serviceLookups.push(service)
+      if (service !== 'remote.profilePluginToggles') return undefined
+      return {
+        async list() { return { ok: true, value: { entries: [] } } },
+        async setEnabled() { throw new Error('unexpected toggle') },
+      }
+    },
+    effect(start) {
+      const effect = Promise.resolve().then(start)
+      effects.push(effect)
+      return effect
+    },
     locale: {
       bind() { return key => key },
       register(namespace, dictionaries) {
@@ -392,14 +537,46 @@ test('client apply registers bilingual copy and starts the sidebar enhancer', as
         return () => {}
       },
     },
+    remote: {
+      async $mount(contribution) {
+        remoteMounts.push(contribution)
+        return async () => {}
+      },
+    },
   }
 
   try {
-    assert.deepEqual(client.inject, ['locale'])
+    assert.deepEqual(client.inject, ['locale', 'remote'])
     client.apply(ctx)
+    await Promise.all(effects)
     assert.equal(registrations[0].namespace, 'dsh-ui-enhancements')
     assert.equal(registrations[0].dictionaries.zh['pin.aria'], '置顶会话“{title}”')
     assert.equal(registrations[0].dictionaries.en['archive.aria'], 'Archive session “{title}”')
+    assert.deepEqual(
+      remoteMounts[0].descriptors.map(descriptor => descriptor.method),
+      ['list', 'setEnabled'],
+    )
+    const [listDescriptor, setEnabledDescriptor] = remoteMounts[0].descriptors
+    assert.equal(listDescriptor.result.mode, 'strict')
+    assert.deepEqual(listDescriptor.result.schema.parse({ entries: [] }), { entries: [] })
+    assert.throws(() => listDescriptor.result.schema.parse({ entries: 'invalid' }), /entries/)
+    for (const parameter of setEnabledDescriptor.parameters) {
+      assert.equal(parameter.codec.mode, 'strict')
+    }
+    assert.equal(setEnabledDescriptor.parameters[0].codec.schema.parse('plugin-entry'), 'plugin-entry')
+    assert.throws(() => setEnabledDescriptor.parameters[0].codec.schema.parse(''), /entryId/)
+    assert.equal(setEnabledDescriptor.parameters[1].codec.schema.parse(false), false)
+    assert.throws(() => setEnabledDescriptor.parameters[1].codec.schema.parse('false'), /enabled/)
+    assert.equal(setEnabledDescriptor.result.mode, 'strict')
+    assert.deepEqual(
+      setEnabledDescriptor.result.schema.parse({ entryId: 'plugin-entry', enabled: false }),
+      { entryId: 'plugin-entry', enabled: false },
+    )
+    assert.throws(
+      () => setEnabledDescriptor.result.schema.parse({ entryId: 1, enabled: false }),
+      /entryId/,
+    )
+    assert.deepEqual(serviceLookups, ['remote.profilePluginToggles'])
     assert.equal(observed, true)
   } finally {
     globalThis.window = previous.window

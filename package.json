@@ -1,6 +1,6 @@
 {
   "name": "dsh-ui-enhancements",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Small, focused UI enhancements for DeepSeek Harness",
   "main": "lib/index.js",
   "scripts": {
@@ -37,7 +37,8 @@
     "client": {
       "platform": "web",
       "inject": [
-        "@deepseek-ai/dsh-client-locale"
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-api-remotes"
       ]
     }
   },
@@ -52,5 +53,8 @@
   },
   "sideEffects": [
     "./lib/client.js"
-  ]
+  ],
+  "peerDependencies": {
+    "@deepseek-ai/dsh-typert-protocol": "^0.1.1-rc.2"
+  }
 }

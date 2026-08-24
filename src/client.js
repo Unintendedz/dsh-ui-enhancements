@@ -8,6 +8,10 @@ const zh = {
   'unpin.aria': '取消置顶会话“{title}”',
   'archive.aria': '归档会话“{title}”',
   'archive.failed': '归档失败',
+  'plugin.enable': '启用插件“{name}”',
+  'plugin.disable': '停用插件“{name}”',
+  'plugin.locked': '插件管理器“{name}”始终启用',
+  'plugin.failed': '插件“{name}”开关失败，请重试',
 }
 
 const en = {
@@ -15,9 +19,114 @@ const en = {
   'unpin.aria': 'Unpin session “{title}”',
   'archive.aria': 'Archive session “{title}”',
   'archive.failed': 'Archive failed',
+  'plugin.enable': 'Enable plugin “{name}”',
+  'plugin.disable': 'Disable plugin “{name}”',
+  'plugin.locked': 'Plugin manager “{name}” is always enabled',
+  'plugin.failed': 'Could not change plugin “{name}”; try again',
 }
 
-export const inject = ['locale']
+export const inject = ['locale', 'remote']
+
+function nonEmptyString(value, field) {
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw new TypeError(`${field} must be a non-empty string`)
+  }
+  return value
+}
+
+function booleanValue(value, field) {
+  if (typeof value !== 'boolean') throw new TypeError(`${field} must be a boolean`)
+  return value
+}
+
+const entryIdSchema = {
+  parse: value => nonEmptyString(value, 'entryId'),
+}
+
+const enabledSchema = {
+  parse: value => booleanValue(value, 'enabled'),
+}
+
+const pluginToggleSnapshotSchema = {
+  parse(value) {
+    if (value === null || typeof value !== 'object' || !Array.isArray(value.entries)) {
+      throw new TypeError('entries must be an array')
+    }
+    return {
+      entries: value.entries.map((entry, index) => {
+        if (entry === null || typeof entry !== 'object') {
+          throw new TypeError(`entries[${index}] must be an object`)
+        }
+        return {
+          entryId: nonEmptyString(entry.entryId, `entries[${index}].entryId`),
+          moduleName: nonEmptyString(entry.moduleName, `entries[${index}].moduleName`),
+          version: nonEmptyString(entry.version, `entries[${index}].version`),
+          enabled: enabledSchema.parse(entry.enabled),
+          locked: booleanValue(entry.locked, `entries[${index}].locked`),
+        }
+      }),
+    }
+  },
+}
+
+const pluginToggleResultSchema = {
+  parse(value) {
+    if (value === null || typeof value !== 'object') {
+      throw new TypeError('toggle result must be an object')
+    }
+    return {
+      entryId: entryIdSchema.parse(value.entryId),
+      enabled: enabledSchema.parse(value.enabled),
+    }
+  },
+}
+
+function strictCodec(typeSymbol, schema) {
+  return { mode: 'strict', typeSymbol, schema }
+}
+
+const PROFILE_PLUGIN_REMOTE = {
+  package: 'dsh-ui-enhancements',
+  descriptors: [
+    {
+      id: 'dsh-ui-enhancements#profilePluginToggles/list',
+      service: 'profilePluginToggles',
+      namespace: 'profilePluginToggles',
+      method: 'list',
+      invocation: { kind: 'direct' },
+      parameters: [],
+      result: strictCodec(
+        'dsh-ui-enhancements#ProfilePluginToggleSnapshot',
+        pluginToggleSnapshotSchema,
+      ),
+    },
+    {
+      id: 'dsh-ui-enhancements#profilePluginToggles/setEnabled',
+      service: 'profilePluginToggles',
+      namespace: 'profilePluginToggles',
+      method: 'setEnabled',
+      invocation: { kind: 'direct' },
+      parameters: [
+        {
+          name: 'entryId',
+          wire: 'entryId',
+          source: 'json',
+          codec: strictCodec('dsh-ui-enhancements#ProfilePluginEntryId', entryIdSchema),
+        },
+        {
+          name: 'enabled',
+          wire: 'enabled',
+          source: 'json',
+          codec: strictCodec('dsh-ui-enhancements#ProfilePluginEnabled', enabledSchema),
+        },
+      ],
+      result: strictCodec(
+        'dsh-ui-enhancements#ProfilePluginToggleResult',
+        pluginToggleResultSchema,
+      ),
+    },
+  ],
+}
 
 export function pinnedSessionOrder(sessionIds, pinnedIds) {
   const sessions = new Set(sessionIds)
@@ -261,6 +370,125 @@ export function installSessionQuickActions(
   }
 }
 
+function syncPluginToggle(button, plugin, t) {
+  button.setAttribute('aria-checked', String(plugin.enabled))
+  button.disabled = plugin.locked === true || button.dataset.status === 'pending'
+  const key = plugin.locked ? 'plugin.locked' : plugin.enabled ? 'plugin.disable' : 'plugin.enable'
+  const label = t(key, { name: plugin.moduleName })
+  button.setAttribute('aria-label', label)
+  button.setAttribute('title', label)
+}
+
+export function mountPluginToggle(card, plugin, t, onToggle) {
+  const header = [...card.children].find(child => child.tagName === 'BUTTON')
+  if (header === undefined) return false
+  const documentApi = card.ownerDocument ?? document
+  card.classList.add('dsh-ui-enhancements-plugin-card')
+  header.classList.add('dsh-ui-enhancements-plugin-card-header')
+
+  let button = card.querySelector('[data-dsh-ui-enhancements-plugin-toggle]')
+  if (button === null) {
+    button = documentApi.createElement('button')
+    button.setAttribute('type', 'button')
+    button.setAttribute('role', 'switch')
+    button.setAttribute('data-dsh-ui-enhancements-plugin-toggle', plugin.entryId)
+    button.classList.add('dsh-ui-enhancements-plugin-toggle')
+    const track = documentApi.createElement('span')
+    track.classList.add('dsh-ui-enhancements-plugin-toggle-track')
+    const thumb = documentApi.createElement('span')
+    thumb.classList.add('dsh-ui-enhancements-plugin-toggle-thumb')
+    track.appendChild(thumb)
+    button.appendChild(track)
+    button.addEventListener('click', async (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      const current = button.pluginToggleState
+      if (current.locked || button.disabled) return
+      const enabled = !current.enabled
+      button.disabled = true
+      button.dataset.status = 'pending'
+      try {
+        const result = await button.pluginToggleAction(current.entryId, enabled)
+        if (result?.entryId !== current.entryId || typeof result.enabled !== 'boolean') {
+          throw new Error('invalid plugin toggle response')
+        }
+        current.enabled = result.enabled
+        button.dataset.status = 'idle'
+        syncPluginToggle(button, current, button.pluginToggleTranslate)
+      } catch {
+        button.dataset.status = 'failed'
+        syncPluginToggle(button, current, button.pluginToggleTranslate)
+        button.setAttribute('title', button.pluginToggleTranslate('plugin.failed', { name: current.moduleName }))
+      }
+    })
+    card.appendChild(button)
+  }
+
+  button.pluginToggleState = plugin
+  button.pluginToggleAction = onToggle
+  button.pluginToggleTranslate = t
+  syncPluginToggle(button, plugin, t)
+  return true
+}
+
+export function installPluginToggles(
+  t,
+  api,
+  documentApi = document,
+  Observer = globalThis.MutationObserver,
+) {
+  let entries = new Map()
+  let timer
+  let disposed = false
+
+  const sync = () => {
+    for (const card of documentApi.querySelectorAll('[data-plugin-entry]')) {
+      const entry = entries.get(card.getAttribute('data-plugin-entry'))
+      if (entry !== undefined) mountPluginToggle(card, entry, t, setEnabled)
+    }
+  }
+  const refresh = async () => {
+    try {
+      const snapshot = await api.list()
+      if (!Array.isArray(snapshot?.entries)) throw new Error('invalid plugin toggle inventory')
+      entries = new Map(snapshot.entries
+        .filter(entry => typeof entry?.entryId === 'string'
+          && typeof entry?.moduleName === 'string'
+          && typeof entry?.enabled === 'boolean'
+          && typeof entry?.locked === 'boolean')
+        .map(entry => [entry.entryId, entry]))
+      if (!disposed) sync()
+    } catch (error) {
+      entries = new Map()
+      console.warn('dsh-ui-enhancements: plugin switches unavailable', error)
+    }
+  }
+  const setEnabled = async (entryId, enabled) => {
+    const result = await api.setEnabled(entryId, enabled)
+    const entry = entries.get(entryId)
+    if (entry !== undefined && result?.entryId === entryId && typeof result.enabled === 'boolean') {
+      entry.enabled = result.enabled
+    }
+    return result
+  }
+  const schedule = () => {
+    if (timer !== undefined) return
+    timer = setTimeout(() => {
+      timer = undefined
+      sync()
+    }, 0)
+  }
+  const observer = typeof Observer === 'function' ? new Observer(schedule) : undefined
+  observer?.observe(documentApi.body, { childList: true, subtree: true })
+  void refresh()
+
+  return () => {
+    disposed = true
+    if (timer !== undefined) clearTimeout(timer)
+    observer?.disconnect()
+  }
+}
+
 export function installStyles(documentApi = document) {
   if (documentApi.querySelector(`#${STYLE_ID}`) !== null) return () => {}
   const style = documentApi.createElement('style')
@@ -323,6 +551,67 @@ export function installStyles(documentApi = document) {
   height: 16px;
   flex: none;
 }
+.dsh-ui-enhancements-plugin-card {
+  position: relative;
+}
+.dsh-ui-enhancements-plugin-card-header {
+  padding-right: 72px !important;
+}
+.dsh-ui-enhancements-plugin-toggle {
+  position: absolute;
+  z-index: 1;
+  top: 4px;
+  right: 10px;
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  color: var(--dsw-alias-label-tertiary);
+  background: transparent;
+  cursor: pointer;
+}
+.dsh-ui-enhancements-plugin-toggle:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+.dsh-ui-enhancements-plugin-toggle:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: -2px;
+}
+.dsh-ui-enhancements-plugin-toggle-track {
+  position: relative;
+  display: block;
+  width: 32px;
+  height: 18px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-layer-1);
+}
+.dsh-ui-enhancements-plugin-toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: currentColor;
+  transition: transform 120ms var(--ds-ease-in-out);
+}
+.dsh-ui-enhancements-plugin-toggle[aria-checked="true"] {
+  color: var(--dsw-alias-state-business-primary);
+}
+.dsh-ui-enhancements-plugin-toggle[aria-checked="true"] .dsh-ui-enhancements-plugin-toggle-thumb {
+  transform: translateX(14px);
+}
+.dsh-ui-enhancements-plugin-toggle:disabled {
+  opacity: .45;
+  cursor: default;
+}
+.dsh-ui-enhancements-plugin-toggle[data-status="pending"] { opacity: .65; }
+.dsh-ui-enhancements-plugin-toggle[data-status="failed"] { color: var(--dsw-alias-label-error); }
 @media (hover: none) and (pointer: coarse) {
   .dsh-ui-enhancements-row .dsh-ui-enhancements-row-actions-host {
     width: auto;
@@ -333,7 +622,8 @@ export function installStyles(documentApi = document) {
   .dsh-ui-enhancements-row .dsh-ui-enhancements-row-time { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .dsh-ui-enhancements-row-actions-host { transition: none; }
+  .dsh-ui-enhancements-row-actions-host,
+  .dsh-ui-enhancements-plugin-toggle-thumb { transition: none; }
 }
 `
   documentApi.head.appendChild(style)
@@ -344,4 +634,30 @@ export function apply(ctx) {
   ctx.effect(installStyles)
   ctx.effect(() => ctx.locale.register(NS, { zh, en }))
   ctx.effect(() => installSessionQuickActions(ctx.locale.bind(NS)))
+  ctx.effect(async () => {
+    try {
+      const unmount = await ctx.remote.$mount(PROFILE_PLUGIN_REMOTE)
+      const remote = ctx.get('remote.profilePluginToggles')
+      if (remote === undefined) throw new Error('profile plugin Remote did not mount')
+      const api = {
+        async list() {
+          const result = await remote.list()
+          if (!result.ok) throw new Error(result.error.message)
+          return result.value
+        },
+        async setEnabled(entryId, enabled) {
+          const result = await remote.setEnabled(entryId, enabled)
+          if (!result.ok) throw new Error(result.error.message)
+          return result.value
+        },
+      }
+      const cleanup = installPluginToggles(ctx.locale.bind(NS), api)
+      return async () => {
+        cleanup()
+        await unmount()
+      }
+    } catch (error) {
+      console.warn('dsh-ui-enhancements: plugin switch Remote unavailable', error)
+    }
+  })
 }
