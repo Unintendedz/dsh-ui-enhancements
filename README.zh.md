@@ -10,8 +10,8 @@
 
 打开 **设置 → 插件 → 插件列表**，即可启用或停用当前 DSH 配置档中安装的每个插件包。
 
-- 修改会立即应用到当前 Loader，并在 DSH 重启后继续生效。
-- 选择结果保存在该配置档 `cordis.patch.yml` 的托管区块中，不会改动用户的其他 YAML 配置。
+- 修改会立即应用到 Host Loader，并在 DSH 重启后继续生效。DSH 0.1.1-rc.2 的浏览器插件需要刷新页面才生效：开关成功后会显示明确提示和刷新按钮，提醒先保存未发送的内容；插件不会自动刷新。
+- 选择结果保存在该配置档 `cordis.patch.yml` 的托管区块中，保留其他设置和注释。支持行内和块状序列（行内格式可能转换为块状格式）；非法 YAML 或补丁条目会在原子替换文件前被拒绝。
 - `dsh-ui-enhancements` 自身的开关保持可见但锁定为启用，避免恢复入口停用自己。
 - DSH 内置运行组件仍然只读，因为停用核心服务可能导致 Web 界面或插件管理器不可用。
 - 如果运行时更新失败，插件会恢复原有持久化状态，开关仍可重试。
@@ -33,7 +33,7 @@
 ## 安装
 
 ```sh
-dsh plugin --profile web add github:Unintendedz/dsh-ui-enhancements#v0.2.0
+dsh plugin --profile web add github:Unintendedz/dsh-ui-enhancements#v0.2.1
 ```
 
 安装或卸载后请重启 DSH Web 服务。

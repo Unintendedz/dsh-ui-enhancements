@@ -11,6 +11,8 @@ const zh = {
   'plugin.enable': '启用插件“{name}”',
   'plugin.disable': '停用插件“{name}”',
   'plugin.locked': '插件管理器“{name}”始终启用',
+  'plugin.refreshRequired': '设置已保存。浏览器插件需要刷新后生效；请先保存未发送的内容。',
+  'plugin.refresh': '我已保存内容，刷新页面',
   'plugin.failed': '插件“{name}”开关失败，请重试',
 }
 
@@ -22,6 +24,8 @@ const en = {
   'plugin.enable': 'Enable plugin “{name}”',
   'plugin.disable': 'Disable plugin “{name}”',
   'plugin.locked': 'Plugin manager “{name}” is always enabled',
+  'plugin.refreshRequired': 'Settings saved. Refresh to apply browser plugins; save any unsent work first.',
+  'plugin.refresh': 'I have saved my work — refresh',
   'plugin.failed': 'Could not change plugin “{name}”; try again',
 }
 
@@ -413,6 +417,24 @@ export function mountPluginToggle(card, plugin, t, onToggle) {
           throw new Error('invalid plugin toggle response')
         }
         current.enabled = result.enabled
+        if (!button.pluginRefreshNotice) {
+          const notice = documentApi.createElement('div')
+          notice.setAttribute('role', 'status')
+          notice.classList.add('dsh-ui-enhancements-refresh-notice')
+          const message = documentApi.createElement('p')
+          const refresh = documentApi.createElement('button')
+          refresh.setAttribute('type', 'button')
+          refresh.addEventListener('click', event => {
+            event.preventDefault()
+            event.stopPropagation()
+            documentApi.defaultView?.location.reload()
+          })
+          notice.append(message, refresh)
+          card.appendChild(notice)
+          button.pluginRefreshNotice = notice
+        }
+        button.pluginRefreshNotice.children[0].textContent = button.pluginToggleTranslate('plugin.refreshRequired')
+        button.pluginRefreshNotice.children[1].textContent = button.pluginToggleTranslate('plugin.refresh')
         button.dataset.status = 'idle'
         syncPluginToggle(button, current, button.pluginToggleTranslate)
       } catch {
@@ -557,6 +579,14 @@ export function installStyles(documentApi = document) {
 .dsh-ui-enhancements-plugin-card-header {
   padding-right: 72px !important;
 }
+.dsh-ui-enhancements-refresh-notice {
+  padding: 12px;
+  margin: 8px;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.dsh-ui-enhancements-refresh-notice button { text-decoration: underline; cursor: pointer; }
 .dsh-ui-enhancements-plugin-toggle {
   position: absolute;
   z-index: 1;

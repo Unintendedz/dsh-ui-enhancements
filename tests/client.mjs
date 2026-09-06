@@ -584,3 +584,19 @@ test('client apply registers bilingual copy and starts the sidebar enhancer', as
     globalThis.MutationObserver = previous.MutationObserver
   }
 })
+
+test('successful host toggles visibly require an explicit refresh and never reload automatically', async () => {
+  const client = await loadClient()
+  const { card } = pluginCard()
+  let reloads = 0
+  card.ownerDocument.defaultView = { location: { reload() { reloads++ } } }
+  client.mountPluginToggle(card, { entryId: 'plugin-a-entry', moduleName: 'plugin-a', enabled: true, locked: false },
+    key => key, async (entryId, enabled) => ({ entryId, enabled }))
+  await card.querySelector('[data-dsh-ui-enhancements-plugin-toggle]').dispatch('click')
+  const notice = card.children.find(child => child.getAttribute('role') === 'status')
+  assert.ok(notice, 'show browser refresh requirement after host state changes')
+  assert.equal(notice.children[0].textContent, 'plugin.refreshRequired')
+  assert.equal(reloads, 0, 'keep unsent work intact until user chooses refresh')
+  await notice.children[1].dispatch('click')
+  assert.equal(reloads, 1)
+})

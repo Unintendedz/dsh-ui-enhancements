@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { parse } from 'yaml'
+import { mkdir, mkdtemp, readFile, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { test } from 'node:test'
+import { test, after } from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
 import { remoteMethods } from '@deepseek-ai/dsh-typert-protocol'
 
@@ -16,8 +17,14 @@ async function writeJson(path, value) {
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`)
 }
 
+const fixturePaths = []
+after(async () => {
+  await Promise.all(fixturePaths.map(path => rm(path, { recursive: true, force: true })))
+})
+
 async function profileFixture() {
   const profileDir = await mkdtemp(join(tmpdir(), 'dsh-ui-enhancements-toggle-'))
+  fixturePaths.push(profileDir)
   await writeJson(join(profileDir, 'package.json'), {
     name: 'dsh-profile-test',
     private: true,
@@ -166,3 +173,48 @@ test('runtime update failure restores the previous persistent state', async () =
   const source = await readFile(join(profileDir, 'cordis.patch.yml'), 'utf8')
   assert.match(source, /- id: "plugin-a-entry"\n  disabled: false/)
 })
+
+for (const source of ['[] # keep empty comment\n', '[{id: existing, disabled: false}] # keep flow comment\n', '---\n- id: existing # keep item comment\n  disabled: false\n...\n']) {
+  test(`toggle produces a valid sequence and preserves comments for ${JSON.stringify(source)}`, () => {
+    const output = updateManagedToggleSource(source, 'plugin-a', false)
+    assert.deepEqual(parse(output), source.includes('existing')
+      ? [{ id: 'existing', disabled: false }, { id: 'plugin-a', disabled: true }]
+      : [{ id: 'plugin-a', disabled: true }])
+    assert.match(output, /keep .* comment/)
+    assert.equal(updateManagedToggleSource(output, 'plugin-a', false), output)
+    assert.equal(parse(updateManagedToggleSource(output, 'plugin-a', true)).at(-1).disabled, false)
+  })
+}
+for (const source of ['[broken', 'settings: true\n', '- id: 123\n', '- id: existing\n  disabled: nope\n', '- id: x\n  id: y\n']) {
+  test(`invalid patch is rejected without changing disk or runtime: ${JSON.stringify(source)}`, async () => {
+    const profileDir = await profileFixture()
+    const path = join(profileDir, 'cordis.patch.yml')
+    await writeFile(path, source)
+    let updated = false
+    const entry = { id: 'plugin-a', options: { id: 'plugin-a', name: 'plugin-a' }, disabled: false,
+      async update() { updated = true } }
+    const gateway = new PluginToggleGateway(new Context(), profileDir, () => [entry])
+    await assert.rejects(gateway.setEnabled('plugin-a', false))
+    assert.equal(await readFile(path, 'utf8'), source)
+    assert.equal(updated, false)
+  })
+}
+
+test('preserves DSH expression tags and insert-only patches without executing expressions', () => {
+  const source = '- insert:\n  - id: added\n    name: plugin-a\n- id: existing\n  disabled: !!js false # expression comment\n'
+  const output = updateManagedToggleSource(source, 'plugin-a', false)
+  assert.ok(output.startsWith(source))
+  assert.match(output, /expression comment/)
+})
+
+for (const source of [
+  '- insert:\n  - name: plugin-a # generated id\n',
+  '- id: group-a\n  group: true\n  config:\n  - name: plugin-a # generated id\n',
+]) {
+  test(`ordinary entries can omit loader-generated IDs: ${JSON.stringify(source)}`, () => {
+    const output = updateManagedToggleSource(source, 'plugin-b', false)
+    assert.ok(output.startsWith(source))
+    assert.deepEqual(parse(output), [...parse(source), { id: 'plugin-b', disabled: true }])
+    assert.equal(updateManagedToggleSource(output, 'plugin-b', false), output)
+  })
+}

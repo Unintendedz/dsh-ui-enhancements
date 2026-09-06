@@ -10,8 +10,8 @@ Small, focused UI enhancements for DeepSeek Harness.
 
 Open **Settings → Plugins → Plugin list** to enable or disable every plugin bundle installed in the active DSH profile.
 
-- Changes are applied to the running Loader immediately and survive DSH restarts.
-- The selected state is stored in a managed block inside the profile's `cordis.patch.yml`; unrelated user YAML is preserved.
+- Changes are applied to the host Loader immediately and survive DSH restarts. Browser plugins require a page refresh on DSH 0.1.1-rc.2: after a successful toggle, a visible notice and refresh button remind you to save unsent work first. The plugin never reloads automatically.
+- The selected state is stored in a managed block inside the profile's `cordis.patch.yml`; unrelated settings and comments are preserved. Flow and block sequences are supported (flow formatting may become block formatting). Invalid YAML or patch entries are rejected before an atomic file replacement.
 - The `dsh-ui-enhancements` switch stays visible but locked on so the recovery control cannot disable itself.
 - DSH's built-in runtime entries remain read-only because disabling core services can make the Web UI or plugin manager unavailable.
 - A failed runtime update restores the previous persistent state and leaves the switch retryable.
@@ -33,7 +33,7 @@ This plugin does not add agent tools, read session content, or copy conversation
 ## Install
 
 ```sh
-dsh plugin --profile web add github:Unintendedz/dsh-ui-enhancements#v0.2.0
+dsh plugin --profile web add github:Unintendedz/dsh-ui-enhancements#v0.2.1
 ```
 
 Restart the DSH Web service after installing or removing the plugin.
