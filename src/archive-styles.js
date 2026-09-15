@@ -50,6 +50,10 @@ export const ARCHIVE_STYLES = `
 .dsh-projectless-path { display:block; margin-top:8px; font-size:12px; color:var(--dsw-alias-label-secondary); overflow-wrap:anywhere; }
 .dsh-projectless-error { max-width:320px; color:var(--dsw-alias-state-error-primary); font-size:12px; overflow-wrap:anywhere; }
 .dsh-projectless-error button { min-height:32px; padding:4px 8px; border:0; border-radius:6px; color:inherit; background:var(--dsw-alias-interactive-bg-hover); cursor:pointer; }
+.dsh-projectless-group-row { background:color-mix(in srgb,var(--dsw-alias-state-business-primary) 8%,transparent); box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--dsw-alias-state-business-primary) 14%,transparent); border-radius:8px; }
+.dsh-projectless-group-row:hover { background:color-mix(in srgb,var(--dsw-alias-state-business-primary) 13%,transparent); }
+.dsh-projectless-group-row:focus-visible { outline:2px solid var(--dsw-alias-state-business-primary); outline-offset:-2px; }
+.dsh-projectless-group-row [data-dsh-projectless-icon] { color:var(--dsw-alias-state-business-primary); }
 .dsh-archives-sr { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
 .dsh-ui-enhancements-manager-button { min-height:32px; padding:6px 12px; border:1px solid var(--dsw-alias-border-l1); border-radius:8px; color:inherit; background:transparent; font:inherit; font-size:13px; cursor:pointer; }
 .dsh-ui-enhancements-manager-button:hover:not(:disabled) { background:var(--dsw-alias-interactive-bg-hover); }

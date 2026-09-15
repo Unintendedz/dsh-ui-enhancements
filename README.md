@@ -11,6 +11,7 @@ Small, focused UI enhancements for DeepSeek Harness.
 Select **New Session** and start typing. The composer defaults to **No workspace**; its existing workspace picker can still select or add a workspace. A workspace's own new-session action continues to start inside that workspace.
 
 - Conversations appear in the sidebar's **No workspace** group. These are ordinary, persistent DSH conversations with the native model picker, attachments, tools, history, search, branches, archive, and delete actions.
+- **No workspace** has a chat-bubble icon and a subtle tinted header. Its disclosure supports the keyboard, and its **+** action starts a no-workspace conversation.
 - Each new conversation receives its own real working directory at `<DSH_HOME>/projectless/session-projectless-<uuid>`. The active profile determines the DSH home. No workspace is registered, and no existing project directory is used. See the storage location under **Settings → Conversations → No workspace**; the native **Open workspace in Finder** action opens the conversation's directory.
 - An empty draft is reused in the same browser tab, including after a reload. Once it has messages, **New Session** allocates another directory. Branches retain their source conversation's directory. Concurrent starts share one allocation; failed creation can retry the same identity. Late creation does not interrupt navigation to a different conversation.
 - Before sending, switching between **No workspace** and a workspace carries the text and attachments through DSH's native draft transfer. Carried text is synchronized to native draft storage for reload recovery. Unsent attachments use DSH's in-memory draft storage; send them before reloading.
@@ -18,6 +19,12 @@ Select **New Session** and start typing. The composer defaults to **No workspace
 - With [dsh-session-workspace](https://github.com/Unintendedz/dsh-session-workspace) installed, a completed conversation can later use **Move to another workspace**. Switch away and wait for the session to close first. Future file operations use the selected workspace; existing generated files remain in their original directory.
 
 The interaction follows [Codex's option to start without a project](https://learn.chatgpt.com/docs/projects), while retaining DSH's native conversation controls.
+
+### Workspace activity order
+
+- The default **Last updated** view sorts workspace groups and **No workspace** together by their most recently updated visible conversation. Collapsed groups follow the same rule; pinned conversations do not pin their workspace. Empty workspaces fall back to their creation time, and ties retain Host order.
+- Activity, archive, restore, delete, and membership changes update the order from the existing session feed. Reordering keeps the same group elements, expansion state, and active draft without reloading the session list.
+- **View options → Manual** retains DSH's stored workspace order and workspace drag controls. Automatic mode disables workspace dragging; switch to Manual to arrange groups yourself. The native flat conversation view is unchanged.
 
 ### Profile plugin switches
 
@@ -29,7 +36,7 @@ Open **Settings → Plugins → Plugin list** to enable or disable every plugin 
 - DSH's built-in runtime entries remain read-only because disabling core services can make the Web UI or plugin manager unavailable.
 - A failed runtime update restores the previous persistent state and leaves the switch retryable.
 
-Version `0.5.0` requires DSH `0.1.5-rc.1` and its JSONL session backend. Restart DSH after installation so the plugin can track each conversation's native lifecycle.
+Version `0.5.1` requires DSH `0.1.5-rc.1` and its JSONL session backend. Restart DSH after installation so the plugin can track each conversation's native lifecycle.
 
 ### Session quick actions
 
@@ -61,12 +68,12 @@ The plugin adds no agent tools or conversation copies. Title fallback resolution
 
 DSH `0.1.5-rc.1` has no native restore/delete API. This release uses its registry serialization, native Agent handles, JSONL write leases, and SQLite search eviction. Revalidate these integrations before upgrading DSH. Restart DSH if a session was already active before the plugin loaded. Subagent sessions owned by another agent cannot be deleted directly.
 
-No-workspace support decorates the occupied native conversation/sidebar components and workspace navigation service without replacing the composer or its child slots. These version-specific adapters are restored on unload and also require revalidation when DSH changes. The storage root and per-conversation directories must be real directories, not symbolic links.
+No-workspace support decorates the occupied native conversation/sidebar components and workspace navigation service without replacing the composer or its child slots. Workspace group ordering also adapts the native sidebar render functions because DSH has no group/row slots. These version-specific adapters are restored on unload and also require revalidation when DSH changes. The storage root and per-conversation directories must be real directories, not symbolic links.
 
 ## Install
 
 ```sh
-dsh plugin --profile web add github:Unintendedz/dsh-ui-enhancements#v0.5.0
+dsh plugin --profile web add github:Unintendedz/dsh-ui-enhancements#v0.5.1
 ```
 
 Restart the DSH Web service after installing or removing the plugin.

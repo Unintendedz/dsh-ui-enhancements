@@ -1,3 +1,5 @@
+import { createWorkspaceSidebar } from './workspace-sidebar.js'
+
 const VIRTUAL_WORKSPACE = '::dsh-no-workspace'
 const PREFIX = 'session-projectless-'
 function string(value) {
@@ -133,9 +135,7 @@ export function registerProjectless(ctx, root, prepare, t) {
       }
       return h(Native, { ...props, useWorkspaces: useWorkspaceChoices, renderSlot, selectWorkspace })
     }))
-    cleanups.push(decorateNativeSlot(ctx, 'sidebar.workspaces', Native => function ProjectlessSidebar(props) {
-      return h(Native, { ...props, t: (key, ...args) => key === 'group.ungrouped' ? t('projectless.label') : props.t(key, ...args) })
-    }))
+    cleanups.push(decorateNativeSlot(ctx, 'sidebar.workspaces', Native => createWorkspaceSidebar(require('react'), Native, t)))
     cleanups.push(decorateNativeSlot(ctx, 'conversation.session', Native => function CarriedDraft(props) {
       const draft = props.useInput(s => s.draft)
       const saved = props.useStore(s => s.draft)
