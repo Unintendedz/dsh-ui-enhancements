@@ -42,7 +42,12 @@ export function createArchiveStore(api, onChanged) {
         if (disposed) return
         const ids = new Set(result.items.map(item => item.sessionId))
         for (const id of removed) if (!ids.has(id)) removed.delete(id)
-        const items = result.items.filter(item => !removed.has(item.sessionId))
+        const previous = new Map(state.items.map(item => [item.sessionId, item]))
+        const items = result.items.filter(item => !removed.has(item.sessionId)).map(item => {
+          const known = previous.get(item.sessionId)
+          return item.titlePending && item.title === item.sessionId && known?.createdAt === item.createdAt
+            ? { ...item, title: known.title } : item
+        })
         const selected = items.some(item => item.sessionId === state.selectedId)
         publish({ items, loaded: true, ...(selected ? {} : {selectedId:null,preview:null}) })
         void hydrate(version)

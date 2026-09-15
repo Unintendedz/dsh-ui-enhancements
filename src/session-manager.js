@@ -190,7 +190,7 @@ export function registerArchiveEntry(ctx, manager, t) {
             ...shown.map(item=>h('li',{key:item.sessionId,'data-archived-session':item.sessionId,'data-selected':item.sessionId===state.selectedId,'aria-busy':state.pending.has(item.sessionId),className:'dsh-archives-row'},
               h('div',{className:'dsh-archives-row-main'},
                 h('button',{type:'button',className:'dsh-archives-open','aria-current':item.sessionId===state.selectedId ? 'true' : undefined,onClick:()=>void store.select(item.sessionId),title:item.title},
-                  h('span',{className:'dsh-archives-row-title'},item.titlePending ? t('archives.untitled') : item.title),
+                  h('span',{className:'dsh-archives-row-title'},item.titlePending && item.title === item.sessionId ? t('archives.untitled') : item.title),
                   h('span',{className:'dsh-archives-row-meta',title:item.cwd},workspaceName(item.cwd),!item.available ? ` · ${t('archives.unavailableShort')}` : '')),
                 item.createdAt ? h('time',{className:'dsh-archives-date',dateTime:new Date(item.createdAt).toISOString(),title:t('archives.created')+new Date(item.createdAt).toLocaleString(t('archives.dateLocale'))},new Date(item.createdAt).toLocaleDateString(t('archives.dateLocale'),{month:'short',day:'numeric'})) : null,
                 actions(item)),

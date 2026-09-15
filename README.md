@@ -16,7 +16,7 @@ Open **Settings → Plugins → Plugin list** to enable or disable every plugin 
 - DSH's built-in runtime entries remain read-only because disabling core services can make the Web UI or plugin manager unavailable.
 - A failed runtime update restores the previous persistent state and leaves the switch retryable.
 
-Version `0.4.0` requires DSH `0.1.5-rc.1` and its JSONL session backend. Restart DSH after installation so the plugin can track each conversation's native lifecycle.
+Version `0.4.1` requires DSH `0.1.5-rc.1` and its JSONL session backend. Restart DSH after installation so the plugin can track each conversation's native lifecycle.
 
 ### Session quick actions
 
@@ -38,7 +38,7 @@ Open **Settings → Conversations → Archived conversations → Manage**, inclu
 - Search matches titles and workspace paths. Selecting a conversation opens a read-only text preview alongside the list; smaller screens show the preview with a back button. Tools and attachments are visible in the full conversation after restoration.
 - **Restore to workspace** removes the archive flag and retains the original workspace membership. The manager stays open so you can continue organizing.
 - **Delete now** uses one confirmation dialog with **Cancel** focused first. A successful deletion or restoration removes only that row, keeping the search and scroll position. A failure retains the row and offers retry; neither operation reloads the inventory or all sessions.
-- Existing DSH header and title checkpoints populate the initial list without reading conversation logs. Missing titles are resolved in background batches of up to eight, with duplicate reads shared. Resolved fallback titles are cached in host memory for up to one minute. Reopening retains the visible inventory while checking for changes; **Refresh** retries failed reads.
+- Existing DSH header and title checkpoints populate the initial list without reading conversation logs. Missing titles are resolved in background batches of up to eight, with duplicate reads shared. Resolved fallback titles remain in host memory. After one minute, background metadata checks validate the log revision; unchanged logs are not reread. Known titles remain visible during revalidation, including after a host restart. Reopening retains the visible inventory while checking for changes; **Refresh** retries failed reads.
 - Only actual Host archive records are included; versions hidden by `dsh-conversation-tree` are excluded. Missing or unreadable records stay visible. Unavailable rows cannot be restored; their text preview can be retried or the record deleted.
 
 The plugin adds no agent tools or conversation copies. Title fallback resolution may read a session log; message text is sent to the browser only when you select a conversation. The browser keeps at most three text previews in memory until the plugin unloads.
@@ -50,7 +50,7 @@ DSH `0.1.5-rc.1` has no native restore/delete API. This release uses its registr
 ## Install
 
 ```sh
-dsh plugin --profile web add github:Unintendedz/dsh-ui-enhancements#v0.4.0
+dsh plugin --profile web add github:Unintendedz/dsh-ui-enhancements#v0.4.1
 ```
 
 Restart the DSH Web service after installing or removing the plugin.

@@ -209,3 +209,38 @@ test('native handle tracking preserves creation receivers and restores its wrapp
   cleanup()
   assert.deepEqual([registry.create, registry.resume], originals)
 })
+
+test('expired fallback titles stay visible and only changed log revisions trigger a reread', async t => {
+  const {ctx}=await fixture(t)
+  const header={id:'target',cwd:'/synthetic',createdAt:1,isSeeded:true}
+  ctx.workspaceRegistry.headers.set('target',header)
+  let now=1000,revision='r1',reads=0
+  t.mock.method(Date,'now',()=>now)
+  ctx.sessionPersistence.stat=async()=>({header,revision})
+  ctx.sessionQuery.readTitleSnapshots=async()=>{reads++;return [{sessionId:'target',status:'fulfilled',value:{session:header,title:{title:revision==='r1'?'Known title':'Edited title'}}}]}
+  await archiveHost.resolveArchivedTitles(ctx,['target'])
+  now=62_000
+  const listed=await host.listArchivedSessions(ctx)
+  assert.equal(listed.items[1].title,'Known title')
+  assert.equal(listed.items[1].titlePending,true)
+  await archiveHost.resolveArchivedTitles(ctx,['target'])
+  assert.equal(reads,1,'unchanged history must not be reread after expiry')
+  now=124_000;revision='r2'
+  assert.equal((await archiveHost.resolveArchivedTitles(ctx,['target'])).items[0].title,'Edited title')
+  assert.equal(reads,2)
+})
+
+test('fallback title state survives distinct RPC caller contexts on the same service', async t => {
+  const {ctx}=await fixture(t)
+  const header={id:'target',cwd:'/synthetic',createdAt:1,isSeeded:true}
+  ctx.workspaceRegistry.headers.set('target',header)
+  ctx.sessionPersistence.stat=async()=>({header,revision:'unchanged'})
+  let reads=0
+  ctx.sessionQuery.readTitleSnapshots=async()=>{reads++;return [{sessionId:'target',status:'fulfilled',value:{session:header,title:{title:'Shared cached title'}}}]}
+  const cache={rows:new Map(),pending:new Map()}
+  await archiveHost.resolveArchivedTitles(Object.create(ctx),['target'],cache)
+  const secondCaller=Object.create(ctx)
+  assert.equal((await host.listArchivedSessions(secondCaller,cache)).items[1].title,'Shared cached title')
+  await archiveHost.resolveArchivedTitles(secondCaller,['target'],cache)
+  assert.equal(reads,1)
+})

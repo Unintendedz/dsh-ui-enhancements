@@ -55,3 +55,14 @@ test('late preview responses never replace the currently selected conversation',
   assert.equal(store.getSnapshot().selectedId,'b')
   assert.equal(store.getSnapshot().preview.messages[0].text,'B')
 })
+
+test('revalidation preserves a known title while the restarted host rebuilds its fallback cache', async () => {
+  let first=true
+  const gate=deferred()
+  const store=stores.createArchiveStore({listArchived:async()=>({items:[first?{...item('a'),title:'Known title'}:{...item('a'),titlePending:true}]}),resolveArchivedTitles:()=>gate.promise},()=>{})
+  await store.load();first=false;await store.load()
+  assert.equal(store.getSnapshot().items[0].title,'Known title')
+  gate.resolve({items:[{...item('a'),title:'Edited title'}]})
+  await new Promise(resolve=>setImmediate(resolve))
+  assert.equal(store.getSnapshot().items[0].title,'Edited title')
+})
