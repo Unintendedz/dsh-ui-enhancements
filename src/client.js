@@ -15,6 +15,7 @@ const zh = {
   'archives.description': '归档会保留对话。你可以查看内容、恢复，或立即删除。',
   'archives.search': '搜索归档标题或工作区',
   'archives.empty': '没有已归档的对话',
+  'archives.unavailable': '暂时无法读取此对话。可刷新重试，或删除这条归档记录。',
   'archives.noMatches': '没有匹配的归档对话',
   'archives.view': '查看',
   'archives.restore': '恢复并打开',
@@ -50,6 +51,7 @@ const en = {
   'archives.description': 'Archived conversations are kept. View, restore, or delete them here.',
   'archives.search': 'Search archived titles or workspaces',
   'archives.empty': 'No archived conversations',
+  'archives.unavailable': 'This conversation cannot be read right now. Refresh to retry, or delete this archived record.',
   'archives.noMatches': 'No matching archived conversations',
   'archives.view': 'View',
   'archives.restore': 'Restore and open',
@@ -664,7 +666,7 @@ export function installStyles(documentApi = document) {
 .dsh-ui-enhancements-archive-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .dsh-ui-enhancements-manager-button { min-height: 44px; padding: 8px 12px; border: 1px solid var(--dsw-alias-border-l1);
   border-radius: 8px; color: inherit; background: transparent; font: inherit; font-size: 13px; cursor: pointer; }
-.dsh-ui-enhancements-manager-button:disabled { opacity: .55; cursor: wait; }
+.dsh-ui-enhancements-manager-button:disabled { opacity: .55; cursor: not-allowed; }
 .dsh-ui-enhancements-danger,.dsh-ui-enhancements-manager-error { color: var(--dsw-alias-state-error-primary); }
 .dsh-ui-enhancements-manager-error:empty { display: none; }
 .dsh-ui-enhancements-dialog-footer { display: flex; justify-content: flex-end; gap: 8px; flex: none; }

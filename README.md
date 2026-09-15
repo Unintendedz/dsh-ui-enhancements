@@ -16,7 +16,7 @@ Open **Settings → Plugins → Plugin list** to enable or disable every plugin 
 - DSH's built-in runtime entries remain read-only because disabling core services can make the Web UI or plugin manager unavailable.
 - A failed runtime update restores the previous persistent state and leaves the switch retryable.
 
-Version `0.3.0` requires DSH `0.1.5-rc.1` and its JSONL session backend. Restart DSH after installation so the plugin can track each conversation's native lifecycle.
+Version `0.3.1` requires DSH `0.1.5-rc.1` and its JSONL session backend. Restart DSH after installation so the plugin can track each conversation's native lifecycle.
 
 ### Session quick actions
 
@@ -39,6 +39,7 @@ Click **Archived** at the bottom of the sidebar, above **Settings**, even when t
 - **Restore and open** removes the archive flag, keeps its workspace membership, and opens the conversation.
 - **Delete now** is also available here and uses the same confirmation as the ordinary list.
 - The inventory uses the Host's actual archive records. Versions hidden only by `dsh-conversation-tree` are not shown as archived.
+- Unreadable or missing old logs do not block the archive list. Their records remain visible with an unavailable notice; refresh to retry or delete the record. View and restore stay disabled until the log can be read.
 
 The plugin adds no agent tools. Archive discovery reads titles and metadata; message text is read only when you choose **View**. No conversation copies are created.
 
@@ -49,7 +50,7 @@ DSH `0.1.5-rc.1` has no native restore/delete API. This release uses its registr
 ## Install
 
 ```sh
-dsh plugin --profile web add github:Unintendedz/dsh-ui-enhancements#v0.3.0
+dsh plugin --profile web add github:Unintendedz/dsh-ui-enhancements#v0.3.1
 ```
 
 Restart the DSH Web service after installing or removing the plugin.

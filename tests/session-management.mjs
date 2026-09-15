@@ -65,6 +65,21 @@ test('archive inventory uses only host archives, including cold titles', async t
   assert.equal(result.items[1].title, 'Archived title')
 })
 
+test('an unreadable archived record does not hide readable conversations or drop its archive flag', async t => {
+  const { ctx } = await fixture(t)
+  const readTitles = ctx.sessionQuery.readTitleSnapshots
+  ctx.sessionQuery.readTitleSnapshots = async ids => (await readTitles(ids)).map(item => item.sessionId === 'other'
+    ? { sessionId: item.sessionId, status: 'rejected', error: new Error('synthetic session log no longer exists') }
+    : item)
+  const result = await host.listArchivedSessions(ctx)
+  assert.equal(result.items.length, 2)
+  assert.equal(result.items[0].sessionId, 'other')
+  assert.equal(result.items[0].available, false)
+  assert.equal(result.items[1].title, 'Archived title')
+  assert.equal(result.items[1].available, true)
+  assert.deepEqual(ctx.workspaceRegistry.archivedSessionIds, ['target', 'other'])
+})
+
 test('reading an archive leaves its archive state intact and returns message text', async t => {
   const { ctx } = await fixture(t)
   assert.equal(typeof host.readArchivedSession, 'function')

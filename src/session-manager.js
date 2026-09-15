@@ -15,7 +15,7 @@ function codec(name, parse) {
 const identity = { name: 'id', wire: 'id', source: 'json', codec: codec('SessionId', id) }
 const methods = [
   ['listArchived', [], codec('ArchiveList', value => ({ items: value.items.map(item => ({
-    sessionId: id(item.sessionId), title: text(item.title), cwd: text(item.cwd), createdAt: Number(item.createdAt),
+    sessionId: id(item.sessionId), title: text(item.title), cwd: text(item.cwd), createdAt: Number(item.createdAt), available: item.available === true,
   })) }))],
   ['readArchived', [identity], codec('ArchivePreview', value => ({ sessionId: id(value.sessionId), messages: value.messages.map(message => ({ role: text(message.role), text: text(message.text) })) }))],
   ['restore', [identity], codec('ArchiveState', archiveState)],
@@ -158,6 +158,7 @@ export function createSessionManager(t, api, onChanged, documentApi = document) 
         row.setAttribute('data-archived-session', item.sessionId)
         const info = element('div', undefined, 'dsh-ui-enhancements-archive-info')
         info.append(element('h3', item.title), element('p', item.cwd))
+        if (!item.available) info.appendChild(element('p', t('archives.unavailable')))
         const actions = element('div', undefined, 'dsh-ui-enhancements-archive-actions')
         actions.append(button(t('archives.view'), () => { void preview(item) }), button(t('archives.restore'), async () => {
           if (busy) return
@@ -170,6 +171,10 @@ export function createSessionManager(t, api, onChanged, documentApi = document) 
           } catch (reason) { error.textContent = message(reason) }
           finally { busy = false }
         }), button(t('delete.action'), () => { if (!busy) confirmDelete(item) }, true))
+        if (!item.available) {
+          actions.children[0].disabled = true
+          actions.children[1].disabled = true
+        }
         row.append(info, actions)
         list.appendChild(row)
       }
