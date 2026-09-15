@@ -575,8 +575,10 @@ test('client apply registers bilingual copy and starts the sidebar enhancer', as
   const ctx = {
     inject() {},
     slots: { inject: () => () => {} },
+    uiWorkspace: { connectWorkspace() {}, startSession() {} },
     get(service) {
       serviceLookups.push(service)
+      if (service === 'remote.projectlessConversations') return { async info() { return { ok: true, value: { root: '/synthetic/projectless' } } } }
       if (service !== 'remote.profilePluginToggles') return undefined
       return {
         async list() { return { ok: true, value: { entries: [] } } },
@@ -605,7 +607,7 @@ test('client apply registers bilingual copy and starts the sidebar enhancer', as
 
   try {
     globalThis.require = () => ({ createElement() {} })
-    assert.deepEqual(client.inject, ['locale', 'remote', 'slots', 'sessions', 'workspaces', 'layout'])
+    assert.deepEqual(client.inject, ['locale', 'remote', 'slots', 'sessions', 'workspaces', 'layout', 'uiWorkspace'])
     client.apply(ctx)
     await Promise.all(effects)
     assert.equal(registrations[0].namespace, 'dsh-ui-enhancements')
@@ -613,7 +615,7 @@ test('client apply registers bilingual copy and starts the sidebar enhancer', as
     assert.equal(registrations[0].dictionaries.en['archive.aria'], 'Archive session “{title}”')
     assert.deepEqual(
       remoteMounts[0].descriptors.map(descriptor => descriptor.method),
-      ['list', 'setEnabled', 'listArchived', 'resolveArchivedTitles', 'readArchived', 'restore', 'delete'],
+      ['list', 'setEnabled', 'listArchived', 'resolveArchivedTitles', 'readArchived', 'restore', 'delete', 'info', 'prepare'],
     )
     assert.equal(remoteMounts.length, 1, 'a Remote package must be mounted once')
     const [listDescriptor, setEnabledDescriptor] = remoteMounts[0].descriptors
@@ -636,7 +638,7 @@ test('client apply registers bilingual copy and starts the sidebar enhancer', as
       () => setEnabledDescriptor.result.schema.parse({ entryId: 1, enabled: false }),
       /entryId/,
     )
-    assert.deepEqual(serviceLookups.sort(), ['remote.profilePluginToggles', 'remote.sessionManagement'])
+    assert.deepEqual(serviceLookups.sort(), ['remote.profilePluginToggles', 'remote.projectlessConversations', 'remote.sessionManagement'])
     assert.equal(observed, true)
   } finally {
     globalThis.window = previous.window

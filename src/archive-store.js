@@ -3,9 +3,9 @@
 export function createArchiveStore(api, onChanged) {
   let state = { items: [], loaded: false, loading: false, hydrating: false, error: '', query: '', selectedId: null, preview: null, pending: new Set() }
   const listeners = new Set()
-  const removed = new Set()
+  const removed = new Map()
   const previews = new Map()
-  let request, generation = 0, disposed = false
+  let request, generation = 0, mutation = 0, disposed = false
   const publish = patch => {
     if (disposed) return
     state = { ...state, ...patch }
@@ -35,13 +35,15 @@ export function createArchiveStore(api, onChanged) {
   const load = () => {
     if (request) return request
     const version = ++generation
+    const startedAfterMutation = mutation
     publish({ loading: true, error: '', hydrating: false })
     request = (async () => {
       try {
         const result = await api.listArchived()
         if (disposed) return
-        const ids = new Set(result.items.map(item => item.sessionId))
-        for (const id of removed) if (!ids.has(id)) removed.delete(id)
+        // Only responses started before a row mutation need its tombstone.
+        // A fresh inventory may legitimately contain a restored/rearchived row.
+        for (const [id, revision] of removed) if (revision <= startedAfterMutation) removed.delete(id)
         const previous = new Map(state.items.map(item => [item.sessionId, item]))
         const items = result.items.filter(item => !removed.has(item.sessionId)).map(item => {
           const known = previous.get(item.sessionId)
@@ -61,7 +63,7 @@ export function createArchiveStore(api, onChanged) {
     publish({ pending: new Set([...state.pending, id]), error: '' })
     try {
       const result = await (action === 'delete' ? api.delete(id, true) : api.restore(id))
-      removed.add(id)
+      removed.set(id, ++mutation)
       previews.delete(id)
       publish({ items: state.items.filter(item => item.sessionId !== id), ...(state.selectedId === id ? {selectedId:null,preview:null} : {}) })
       // The native removal event updates session state. Never refetch all sessions.

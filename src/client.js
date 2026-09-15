@@ -1,5 +1,7 @@
 import { ARCHIVE_STYLES } from './archive-styles.js'
 import { createSessionManager, SESSION_MANAGEMENT_REMOTE, registerArchiveEntry } from './session-manager.js'
+import { PROJECTLESS_REMOTE, registerProjectless } from './projectless.js'
+export { createProjectlessDrafts } from './projectless.js'
 export { createSessionManager } from './session-manager.js'
 
 const NS = 'dsh-ui-enhancements'
@@ -8,9 +10,12 @@ const FLAT_SESSION_ORDER_KEY = '__flat_session_order__'
 const STYLE_ID = 'dsh-ui-enhancements-style'
 
 const zh = {
+  'projectless.label': '无工作区',
+  'projectless.failed': '无法开始对话：',
+  'projectless.description': '新对话无需选择工作区。文件按对话分别保存到以下目录。',
   'archives.dateLocale': 'zh-CN',
   'archives.settings': '对话管理',
-  'archives.settingsDescription': '查看和整理归档的对话，或将它们恢复到工作区。',
+  'archives.settingsDescription': '查看、整理或恢复归档的对话。',
   'archives.manage': '管理',
   'archives.back': '返回对话',
   'archives.backToList': '返回归档列表',
@@ -34,7 +39,7 @@ const zh = {
   'archives.unavailable': '暂时无法读取此对话。可刷新重试，或删除这条归档记录。',
   'archives.noMatches': '没有匹配的归档对话',
   'archives.view': '查看',
-  'archives.restore': '恢复到工作区',
+  'archives.restore': '恢复对话',
   'archives.preview': '文本预览；恢复后可在对话中查看完整内容。',
   'archives.user': '你',
   'archives.assistant': '助手',
@@ -59,9 +64,12 @@ const zh = {
 }
 
 const en = {
+  'projectless.label': 'No workspace',
+  'projectless.failed': 'Could not start a conversation:',
+  'projectless.description': 'Start conversations without choosing a workspace. Files are saved in a separate folder per conversation under this directory.',
   'archives.dateLocale': 'en-US',
   'archives.settings': 'Conversations',
-  'archives.settingsDescription': 'View and organize archived conversations, or restore them to a workspace.',
+  'archives.settingsDescription': 'View, organize, or restore archived conversations.',
   'archives.manage': 'Manage',
   'archives.back': 'Back to conversation',
   'archives.backToList': 'Back to archived conversations',
@@ -85,7 +93,7 @@ const en = {
   'archives.unavailable': 'This conversation cannot be read right now. Refresh to retry, or delete this archived record.',
   'archives.noMatches': 'No matching archived conversations',
   'archives.view': 'View',
-  'archives.restore': 'Restore to workspace',
+  'archives.restore': 'Restore conversation',
   'archives.preview': 'Text preview. Restore the conversation to view its full content.',
   'archives.user': 'You',
   'archives.assistant': 'Assistant',
@@ -109,7 +117,7 @@ const en = {
   'plugin.failed': 'Could not change plugin “{name}”; try again',
 }
 
-export const inject = ['locale', 'remote', 'slots', 'sessions', 'workspaces', 'layout']
+export const inject = ['locale', 'remote', 'slots', 'sessions', 'workspaces', 'layout', 'uiWorkspace']
 
 function nonEmptyString(value, field) {
   if (typeof value !== 'string' || value.trim() === '') {
@@ -779,7 +787,7 @@ export function apply(ctx) {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }))
   ctx.effect(async () => {
     const unmount = await ctx.remote.$mount({
-      package: NS, descriptors: [...PROFILE_PLUGIN_REMOTE.descriptors, ...SESSION_MANAGEMENT_REMOTE.descriptors],
+      package: NS, descriptors: [...PROFILE_PLUGIN_REMOTE.descriptors, ...SESSION_MANAGEMENT_REMOTE.descriptors, ...PROJECTLESS_REMOTE.descriptors],
     })
     const cleanups = []
     try {
@@ -809,7 +817,15 @@ export function apply(ctx) {
         if (result.deleted && ctx.sessions.list.getSnapshot().current === result.sessionId) ctx.sessions.clear()
       })
       cleanups.push(() => manager.dispose())
-      cleanups.push(registerArchiveEntry(ctx, manager, ctx.locale.bind(NS)))
+      const projectless = ctx.get('remote.projectlessConversations')
+      const info = await projectless.info()
+      if (!info.ok) throw new Error(info.error.message)
+      cleanups.push(registerArchiveEntry(ctx, manager, ctx.locale.bind(NS), { projectlessRoot: info.value.root }))
+      cleanups.push(registerProjectless(ctx, info.value.root, async requestId => {
+        const result = await projectless.prepare(requestId)
+        if (!result.ok) throw new Error(result.error.message)
+        return result.value
+      }, ctx.locale.bind(NS)))
       cleanups.push(installSessionQuickActions(ctx.locale.bind(NS), window, document, globalThis.MutationObserver, target => manager.confirmDelete(target)))
       return async () => {
         for (const cleanup of cleanups.reverse()) cleanup()

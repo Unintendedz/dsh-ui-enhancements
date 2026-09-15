@@ -1,6 +1,20 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import * as stores from '../src/archive-store.js'
+
+test('a fresh inventory can show a conversation archived again after restoration', async () => {
+  const record = { sessionId: 'rearchived', title: 'Retained conversation', cwd: '/synthetic/projectless', available: true }
+  const store = stores.createArchiveStore({
+    async listArchived() { return { items: [record] } },
+    async restore() { return { archivedSessionIds: [] } },
+  }, async () => {})
+  await store.load()
+  await store.restore(record.sessionId)
+  assert.equal(store.getSnapshot().items.length, 0)
+  await store.load()
+  assert.equal(store.getSnapshot().items.length, 1)
+  store.dispose()
+})
 const item = id => ({ sessionId: id, title: id, cwd: '/synthetic', available: true, titlePending: false, createdAt: 1 })
 const deferred = () => { let resolve, reject; const promise = new Promise((a,b) => { resolve=a; reject=b }); return {promise,resolve,reject} }
 

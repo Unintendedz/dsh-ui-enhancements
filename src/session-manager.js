@@ -1,4 +1,5 @@
 import { createArchiveStore } from './archive-store.js'
+import { isProjectlessDirectory } from './projectless.js'
 function text(value) {
   if (typeof value !== 'string') throw new TypeError('expected a string')
   return value
@@ -126,7 +127,7 @@ export function createSessionManager(t, api, onChanged, documentApi = document) 
   }
 }
 
-export function registerArchiveEntry(ctx, manager, t) {
+export function registerArchiveEntry(ctx, manager, t, { projectlessRoot } = {}) {
   // React is provided by DSH. Use its public main/settings slots and native
   // layout navigation, without adding another permanent sidebar action.
   const { createElement: h, useSyncExternalStore, useEffect, useLayoutEffect, useRef, useState } = require('react')
@@ -140,7 +141,7 @@ export function registerArchiveEntry(ctx, manager, t) {
   }
   const icon = name => h('svg', {width:16,height:16,viewBox:'0 0 16 16',fill:'none','aria-hidden':true}, h('path',{d:paths[name],stroke:'currentColor',strokeWidth:1.4,strokeLinecap:'round',strokeLinejoin:'round'}))
   const iconButton = (name, label, onClick, extra = {}) => h('button', {type:'button',className:'dsh-archives-icon',title:label,'aria-label':label,onClick,...extra},icon(name))
-  const workspaceName = cwd => cwd.split(/[\\/]/).filter(Boolean).at(-1) || t('archives.noWorkspace')
+  const workspaceName = cwd => (projectlessRoot && isProjectlessDirectory(cwd, projectlessRoot)) ? t('archives.noWorkspace') : cwd.split(/[\\/]/).filter(Boolean).at(-1) || t('archives.noWorkspace')
   let savedScroll = 0
   function ArchivePage() {
     const state = useSyncExternalStore(store.subscribe, store.getSnapshot)
@@ -205,7 +206,10 @@ export function registerArchiveEntry(ctx, manager, t) {
   function ConversationSettings({close}) {
     return h('section',{className:'dsh-archives-settings'},h('h2',null,t('archives.settings')),
       h('div',{className:'dsh-archives-settings-row'},h('div',null,h('h3',null,t('archives.title')),h('p',null,t('archives.settingsDescription'))),
-        h('button',{type:'button',className:'dsh-ui-enhancements-manager-button',onClick:()=>{close();manager.showArchives()}},t('archives.manage'))))
+        h('button',{type:'button',className:'dsh-ui-enhancements-manager-button',onClick:()=>{close();manager.showArchives()}},t('archives.manage'))),
+      projectlessRoot && h('div',{className:'dsh-archives-settings-row'},h('div',null,
+        h('h3',null,t('projectless.label')),h('p',null,t('projectless.description')),
+        h('code',{className:'dsh-projectless-path'},projectlessRoot))))
   }
   manager.bindNavigation(()=>{
     ctx.layout.selectPanel('dsh-archives')

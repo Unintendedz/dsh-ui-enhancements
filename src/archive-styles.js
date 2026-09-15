@@ -47,6 +47,9 @@ export const ARCHIVE_STYLES = `
 .dsh-archives-settings-row h3 { margin:0 0 4px; font-size:14px; font-weight:400; }
 .dsh-archives-settings-row p { margin:0; font-size:12px; line-height:18px; color:var(--dsw-alias-label-secondary); }
 .dsh-archives-settings-row button { flex:none; white-space:nowrap; }
+.dsh-projectless-path { display:block; margin-top:8px; font-size:12px; color:var(--dsw-alias-label-secondary); overflow-wrap:anywhere; }
+.dsh-projectless-error { max-width:320px; color:var(--dsw-alias-state-error-primary); font-size:12px; overflow-wrap:anywhere; }
+.dsh-projectless-error button { min-height:32px; padding:4px 8px; border:0; border-radius:6px; color:inherit; background:var(--dsw-alias-interactive-bg-hover); cursor:pointer; }
 .dsh-archives-sr { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
 .dsh-ui-enhancements-manager-button { min-height:32px; padding:6px 12px; border:1px solid var(--dsw-alias-border-l1); border-radius:8px; color:inherit; background:transparent; font:inherit; font-size:13px; cursor:pointer; }
 .dsh-ui-enhancements-manager-button:hover:not(:disabled) { background:var(--dsw-alias-interactive-bg-hover); }
