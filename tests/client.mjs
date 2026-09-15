@@ -605,7 +605,7 @@ test('client apply registers bilingual copy and starts the sidebar enhancer', as
 
   try {
     globalThis.require = () => ({ createElement() {} })
-    assert.deepEqual(client.inject, ['locale', 'remote', 'slots', 'sessions', 'workspaces'])
+    assert.deepEqual(client.inject, ['locale', 'remote', 'slots', 'sessions', 'workspaces', 'layout'])
     client.apply(ctx)
     await Promise.all(effects)
     assert.equal(registrations[0].namespace, 'dsh-ui-enhancements')
@@ -613,7 +613,7 @@ test('client apply registers bilingual copy and starts the sidebar enhancer', as
     assert.equal(registrations[0].dictionaries.en['archive.aria'], 'Archive session “{title}”')
     assert.deepEqual(
       remoteMounts[0].descriptors.map(descriptor => descriptor.method),
-      ['list', 'setEnabled', 'listArchived', 'readArchived', 'restore', 'delete'],
+      ['list', 'setEnabled', 'listArchived', 'resolveArchivedTitles', 'readArchived', 'restore', 'delete'],
     )
     assert.equal(remoteMounts.length, 1, 'a Remote package must be mounted once')
     const [listDescriptor, setEnabledDescriptor] = remoteMounts[0].descriptors

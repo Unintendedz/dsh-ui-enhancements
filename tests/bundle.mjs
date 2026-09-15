@@ -16,5 +16,5 @@ test('built browser artifact registers the standalone DSH client plugin', async 
   assert.equal(registration.id, 'dsh-ui-enhancements')
   const plugin = registration.factory(() => { throw new Error('unexpected browser dependency') })
   assert.equal(typeof plugin.apply, 'function')
-  assert.deepEqual(Array.from(plugin.inject), ['locale', 'remote', 'slots', 'sessions', 'workspaces'])
+  assert.deepEqual(Array.from(plugin.inject), ['locale', 'remote', 'slots', 'sessions', 'workspaces', 'layout'])
 })

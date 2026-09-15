@@ -1,3 +1,4 @@
+import { ARCHIVE_STYLES } from './archive-styles.js'
 import { createSessionManager, SESSION_MANAGEMENT_REMOTE, registerArchiveEntry } from './session-manager.js'
 export { createSessionManager } from './session-manager.js'
 
@@ -7,18 +8,33 @@ const FLAT_SESSION_ORDER_KEY = '__flat_session_order__'
 const STYLE_ID = 'dsh-ui-enhancements-style'
 
 const zh = {
+  'archives.dateLocale': 'zh-CN',
+  'archives.settings': '对话管理',
+  'archives.settingsDescription': '查看和整理归档的对话，或将它们恢复到工作区。',
+  'archives.manage': '管理',
+  'archives.back': '返回对话',
+  'archives.backToList': '返回归档列表',
+  'archives.titlesLoading': '正在补全标题…',
+  'archives.hint': '选择对话查看内容',
+  'archives.matches': '{count} 条匹配',
+  'archives.noWorkspace': '无工作区',
+  'archives.unavailableShort': '无法读取',
+  'archives.untitled': '正在读取标题…',
+  'archives.created': '创建于：',
+  'archives.noText': '没有可预览的文本内容',
+
   'pin.aria': '置顶会话“{title}”',
   'unpin.aria': '取消置顶会话“{title}”',
   'archive.aria': '归档会话“{title}”',
   'archive.failed': '归档失败',
-  'archives.title': '已归档',
-  'archives.description': '归档会保留对话。你可以查看内容、恢复，或立即删除。',
+  'archives.title': '归档对话',
+  'archives.description': '归档的对话保留在这里，不会出现在工作区列表中。',
   'archives.search': '搜索归档标题或工作区',
   'archives.empty': '没有已归档的对话',
   'archives.unavailable': '暂时无法读取此对话。可刷新重试，或删除这条归档记录。',
   'archives.noMatches': '没有匹配的归档对话',
   'archives.view': '查看',
-  'archives.restore': '恢复并打开',
+  'archives.restore': '恢复到工作区',
   'archives.preview': '文本预览；恢复后可在对话中查看完整内容。',
   'archives.user': '你',
   'archives.assistant': '助手',
@@ -43,18 +59,33 @@ const zh = {
 }
 
 const en = {
+  'archives.dateLocale': 'en-US',
+  'archives.settings': 'Conversations',
+  'archives.settingsDescription': 'View and organize archived conversations, or restore them to a workspace.',
+  'archives.manage': 'Manage',
+  'archives.back': 'Back to conversation',
+  'archives.backToList': 'Back to archived conversations',
+  'archives.titlesLoading': 'Updating titles…',
+  'archives.hint': 'Select a conversation to preview',
+  'archives.matches': '{count} matches',
+  'archives.noWorkspace': 'No workspace',
+  'archives.unavailableShort': 'Unavailable',
+  'archives.untitled': 'Reading title…',
+  'archives.created': 'Created: ',
+  'archives.noText': 'No text to preview',
+
   'pin.aria': 'Pin session “{title}”',
   'unpin.aria': 'Unpin session “{title}”',
   'archive.aria': 'Archive session “{title}”',
   'archive.failed': 'Archive failed',
-  'archives.title': 'Archived',
-  'archives.description': 'Archived conversations are kept. View, restore, or delete them here.',
+  'archives.title': 'Archived conversations',
+  'archives.description': 'Archived conversations are kept here and hidden from workspace lists.',
   'archives.search': 'Search archived titles or workspaces',
   'archives.empty': 'No archived conversations',
   'archives.unavailable': 'This conversation cannot be read right now. Refresh to retry, or delete this archived record.',
   'archives.noMatches': 'No matching archived conversations',
   'archives.view': 'View',
-  'archives.restore': 'Restore and open',
+  'archives.restore': 'Restore to workspace',
   'archives.preview': 'Text preview. Restore the conversation to view its full content.',
   'archives.user': 'You',
   'archives.assistant': 'Assistant',
@@ -78,7 +109,7 @@ const en = {
   'plugin.failed': 'Could not change plugin “{name}”; try again',
 }
 
-export const inject = ['locale', 'remote', 'slots', 'sessions', 'workspaces']
+export const inject = ['locale', 'remote', 'slots', 'sessions', 'workspaces', 'layout']
 
 function nonEmptyString(value, field) {
   if (typeof value !== 'string' || value.trim() === '') {
@@ -634,48 +665,7 @@ export function installStyles(documentApi = document) {
 }
 .dsh-ui-enhancements-row-action:hover { color: var(--dsw-alias-label-primary); }
 .dsh-ui-enhancements-row-action[data-dsh-ui-enhancements-action="delete"]:hover { color: var(--dsw-alias-state-error-primary); }
-.dsh-ui-enhancements-archive-entry {
-  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px;
-  padding: 8px 12px; border: 0; border-radius: 10px; cursor: pointer;
-  background: transparent; color: var(--dsw-alias-label-secondary); font: inherit;
-}
-.dsh-ui-enhancements-archive-entry:hover,
-.dsh-ui-enhancements-manager-button:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
-.dsh-ui-enhancements-archive-entry:focus-visible,
-.dsh-ui-enhancements-manager-button:focus-visible,
-.dsh-ui-enhancements-dialog input:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 2px; }
-.dsh-ui-enhancements-dialog {
-  box-sizing: border-box; width: min(720px, calc(100vw - 32px)); max-height: calc(100dvh - 48px);
-  padding: 24px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 16px;
-  background: var(--dsw-alias-bg-layer-1, Canvas); color: var(--dsw-alias-label-primary, CanvasText);
-  box-shadow: 0 12px 48px #0004; overflow: auto;
-}
-.dsh-ui-enhancements-dialog[open] { display: flex; flex-direction: column; gap: 16px; }
-.dsh-ui-enhancements-dialog::backdrop { background: #0008; }
-.dsh-ui-enhancements-dialog h2 { margin: 0; font-size: 19px; line-height: 1.4; overflow-wrap: anywhere; }
-.dsh-ui-enhancements-dialog h3 { margin: 0; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
-.dsh-ui-enhancements-dialog p { margin: 0; font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
-.dsh-ui-enhancements-dialog input {
-  box-sizing: border-box; width: 100%; min-height: 44px; padding: 10px 12px;
-  color: inherit; background: transparent; border: 1px solid var(--dsw-alias-border-l1); border-radius: 8px; font: inherit;
-}
-.dsh-ui-enhancements-archive-list,.dsh-ui-enhancements-preview { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
-.dsh-ui-enhancements-archive-row { padding: 16px 0; border-bottom: 1px solid var(--dsw-alias-border-l1); }
-.dsh-ui-enhancements-archive-info { min-width: 0; }
-.dsh-ui-enhancements-archive-info p { font-size: 12px; color: var(--dsw-alias-label-secondary); margin-top: 4px; }
-.dsh-ui-enhancements-archive-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-.dsh-ui-enhancements-manager-button { min-height: 44px; padding: 8px 12px; border: 1px solid var(--dsw-alias-border-l1);
-  border-radius: 8px; color: inherit; background: transparent; font: inherit; font-size: 13px; cursor: pointer; }
-.dsh-ui-enhancements-manager-button:disabled { opacity: .55; cursor: not-allowed; }
-.dsh-ui-enhancements-danger,.dsh-ui-enhancements-manager-error { color: var(--dsw-alias-state-error-primary); }
-.dsh-ui-enhancements-manager-error:empty { display: none; }
-.dsh-ui-enhancements-dialog-footer { display: flex; justify-content: flex-end; gap: 8px; flex: none; }
-.dsh-ui-enhancements-preview article { padding: 12px 0; border-bottom: 1px solid var(--dsw-alias-border-l1); }
-.dsh-ui-enhancements-preview p { white-space: pre-wrap; margin-top: 8px; }
-.dsh-ui-enhancements-manager-notice { position: fixed; bottom: max(24px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%);
-  z-index: 10000; padding: 12px 20px; border-radius: 10px; background: var(--dsw-alias-bg-layer-1, Canvas);
-  color: var(--dsw-alias-label-primary, CanvasText); border: 1px solid var(--dsw-alias-border-l1); box-shadow: 0 4px 20px #0003; }
-@media (max-width: 480px) { .dsh-ui-enhancements-dialog { padding: 16px; width: calc(100vw - 24px); } }
+${ARCHIVE_STYLES}
 .dsh-ui-enhancements-row-action:focus-visible {
   outline: 2px solid var(--dsw-alias-label-primary-bluish);
   outline-offset: 1px;
@@ -809,16 +799,14 @@ export function apply(ctx) {
       }
       cleanups.push(installPluginToggles(ctx.locale.bind(NS), api))
       const sessionRemote = ctx.get('remote.sessionManagement')
-      const sessionApi = Object.fromEntries(['listArchived', 'readArchived', 'restore', 'delete'].map(method => [method, async (...args) => {
+      const sessionApi = Object.fromEntries(['listArchived', 'resolveArchivedTitles', 'readArchived', 'restore', 'delete'].map(method => [method, async (...args) => {
         const result = await sessionRemote[method](...args)
         if (!result.ok) throw new Error(result.error.message)
         return result.value
       }]))
-      const manager = createSessionManager(ctx.locale.bind(NS), sessionApi, async (result, openId) => {
+      const manager = createSessionManager(ctx.locale.bind(NS), sessionApi, async result => {
         ctx.workspaces.model.installArchived(result.archivedSessionIds)
         if (result.deleted && ctx.sessions.list.getSnapshot().current === result.sessionId) ctx.sessions.clear()
-        await ctx.sessions.refresh()
-        if (openId) ctx.sessions.open(openId)
       })
       cleanups.push(() => manager.dispose())
       cleanups.push(registerArchiveEntry(ctx, manager, ctx.locale.bind(NS)))

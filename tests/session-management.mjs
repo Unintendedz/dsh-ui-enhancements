@@ -4,6 +4,7 @@ import { mkdtemp, mkdir, writeFile, readFile, readdir, rm } from 'node:fs/promis
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import * as host from '../lib/index.js'
+import * as archiveHost from '../lib/session-management.js'
 
 async function fixture(t) {
   const root = await mkdtemp(join(tmpdir(), 'dsh-session-management-test-'))
@@ -57,27 +58,44 @@ async function fixture(t) {
   return { root, directory, ctx, events, live, entries }
 }
 
-test('archive inventory uses only host archives, including cold titles', async t => {
+test('archive inventory returns cached titles without reading any conversation logs', async t => {
   const { ctx } = await fixture(t)
-  assert.equal(typeof host.listArchivedSessions, 'function')
+  ctx.workspaceRegistry.headers.set('target', {id:'target',cwd:'/synthetic',createdAt:1})
+  ctx.sessionProjectionCache = { cachedSnapshot: () => ({values:{title:'Cached title'}}) }
+  ctx.sessionQuery.readTitleSnapshots = () => { throw Error('full log reads must be deferred') }
   const result = await host.listArchivedSessions(ctx)
-  assert.deepEqual(result.items.map(item => item.sessionId), ['other', 'target'])
-  assert.equal(result.items[1].title, 'Archived title')
+  assert.deepEqual(result.items.map(x=>x.sessionId), ['other','target'])
+  assert.equal(result.items[1].title, 'Cached title')
+  assert.equal(result.items[1].titlePending, false)
+  assert.equal(result.items[0].available, false)
 })
 
-test('an unreadable archived record does not hide readable conversations or drop its archive flag', async t => {
+test('uncached and seeded titles are deferred; resolution is deduplicated and never guesses a seed cut', async t => {
   const { ctx } = await fixture(t)
-  const readTitles = ctx.sessionQuery.readTitleSnapshots
-  ctx.sessionQuery.readTitleSnapshots = async ids => (await readTitles(ids)).map(item => item.sessionId === 'other'
-    ? { sessionId: item.sessionId, status: 'rejected', error: new Error('synthetic session log no longer exists') }
-    : item)
-  const result = await host.listArchivedSessions(ctx)
-  assert.equal(result.items.length, 2)
-  assert.equal(result.items[0].sessionId, 'other')
-  assert.equal(result.items[0].available, false)
-  assert.equal(result.items[1].title, 'Archived title')
-  assert.equal(result.items[1].available, true)
-  assert.deepEqual(ctx.workspaceRegistry.archivedSessionIds, ['target', 'other'])
+  ctx.workspaceRegistry.headers.set('target', {id:'target',cwd:'/synthetic',createdAt:1,isSeeded:true})
+  ctx.sessionProjectionCache = { cachedSnapshot: () => { throw Error('unknown inherited cut') } }
+  let reads=0
+  const read=ctx.sessionQuery.readTitleSnapshots
+  ctx.sessionQuery.readTitleSnapshots=async ids=>{reads++;return read(ids)}
+  const initial=await host.listArchivedSessions(ctx)
+  assert.equal(reads,0)
+  assert.equal(initial.items[1].titlePending,true)
+  const [a,b]=await Promise.all([archiveHost.resolveArchivedTitles(ctx,['target']),archiveHost.resolveArchivedTitles(ctx,['target'])])
+  assert.equal(a.items[0].title,'Archived title')
+  assert.equal(b.items[0].title,'Archived title')
+  assert.equal(reads,1)
+  assert.equal((await host.listArchivedSessions(ctx)).items[1].title,'Archived title')
+})
+
+test('an unreadable title remains individually retryable and preserves its archive flag', async t => {
+  const { ctx } = await fixture(t)
+  ctx.workspaceRegistry.headers.set('target', {id:'target',cwd:'/synthetic',createdAt:1})
+  ctx.sessionQuery.readTitleSnapshots = async ids=>ids.map(sessionId=>({sessionId,status:'rejected',reason:Error('unreadable')}))
+  const result=await archiveHost.resolveArchivedTitles(ctx,['target'])
+  assert.equal(result.items[0].available,false)
+  assert.deepEqual(ctx.workspaceRegistry.archivedSessionIds,['target','other'])
+  await assert.rejects(archiveHost.resolveArchivedTitles(ctx,Array(9).fill('target')),/at most/)
+  await assert.rejects(archiveHost.resolveArchivedTitles(ctx,['unarchived']),/not archived/)
 })
 
 test('reading an archive leaves its archive state intact and returns message text', async t => {
