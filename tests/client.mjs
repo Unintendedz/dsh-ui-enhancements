@@ -16,6 +16,14 @@ function actionElement(tagName = 'span') {
     ownerDocument: null,
     dataset: {},
     disabled: false,
+    textContent: '',
+    focus() {},
+    showModal() { element.open = true },
+    close() { element.open = false; listeners.get('close')?.({}) },
+    remove() {
+      if (element.parentElement !== null) element.parentElement.children = element.parentElement.children.filter(child => child !== element)
+      element.parentElement = null
+    },
     classList: {
       add(...names) { for (const name of names) classes.add(name) },
       contains(name) { return classes.has(name) },
@@ -244,6 +252,53 @@ test('row quick actions expose pin state and reuse the native archive action', a
   assert.equal(archiveEvent.propagationStopped, true)
   assert.deepEqual(toggled, ['session-row'])
   assert.deepEqual(archived, ['session-row'])
+})
+
+test('immediate delete requests confirmation for the latest row identity without archiving', async () => {
+  const client = await loadClient()
+  const { row } = quickActionRow()
+  const requests = []
+  let archives = 0
+  const context = { sessionId: 'original', title: 'Original', async archiveSession() { archives++ } }
+  const requestDelete = value => requests.push(value)
+  client.mountSessionQuickActions(row, context, [], key => key, () => {}, requestDelete)
+  const actions = row.querySelector('[data-dsh-ui-enhancements-actions]')
+  const deletion = actions.children.find(button => button.getAttribute('data-dsh-ui-enhancements-action') === 'delete')
+  assert.ok(deletion, 'an immediate delete action is available beside archive')
+  client.mountSessionQuickActions(row, { ...context, sessionId: 'replacement', title: 'New title' }, [], key => key, () => {}, requestDelete)
+  const event = await deletion.dispatch('click')
+  assert.equal(event.propagationStopped, true)
+  assert.deepEqual(requests, [{ sessionId: 'replacement', title: 'New title' }])
+  assert.equal(archives, 0)
+})
+
+test('delete dialog waits for confirmation, preserves itself on failure, and supports retry', async () => {
+  const client = await loadClient()
+  const documentApi = { body: actionElement('body'), createElement: tag => actionElement(tag) }
+  const deletes = []
+  let fail = true
+  assert.equal(typeof client.createSessionManager, 'function')
+  const manager = client.createSessionManager(key => key, {
+    async delete(id, confirmed) { deletes.push({ id, confirmed }); if (fail) throw new Error('offline'); return { deleted: true } },
+  }, async () => {}, documentApi)
+  manager.confirmDelete({ sessionId: 'target', title: 'Target' })
+  const dialog = documentApi.body.children[0]
+  const footer = dialog.children.at(-1)
+  const [cancel, confirm] = footer.children
+  assert.equal(deletes.length, 0)
+  await cancel.dispatch('click')
+  assert.equal(documentApi.body.children.length, 0)
+  manager.confirmDelete({ sessionId: 'target', title: 'Target' })
+  const retryDialog = documentApi.body.children[0]
+  const retryConfirm = retryDialog.children.at(-1).children[1]
+  await retryConfirm.dispatch('click')
+  assert.equal(retryDialog.open, true)
+  assert.equal(retryConfirm.disabled, false)
+  fail = false
+  await retryConfirm.dispatch('click')
+  assert.equal(documentApi.body.children.some(child => child.tagName === 'DIALOG'), false)
+  assert.equal(documentApi.body.children[0].getAttribute('role'), 'status')
+  assert.deepEqual(deletes, [{ id: 'target', confirmed: true }, { id: 'target', confirmed: true }])
 })
 
 test('plugin card switch exposes state and persists the requested opposite state', async () => {
@@ -494,6 +549,7 @@ test('client apply registers bilingual copy and starts the sidebar enhancer', as
     window: globalThis.window,
     document: globalThis.document,
     MutationObserver: globalThis.MutationObserver,
+    require: globalThis.require,
   }
   const registrations = []
   const effects = []
@@ -517,6 +573,8 @@ test('client apply registers bilingual copy and starts the sidebar enhancer', as
     disconnect() {}
   }
   const ctx = {
+    inject() {},
+    slots: { inject: () => () => {} },
     get(service) {
       serviceLookups.push(service)
       if (service !== 'remote.profilePluginToggles') return undefined
@@ -546,7 +604,8 @@ test('client apply registers bilingual copy and starts the sidebar enhancer', as
   }
 
   try {
-    assert.deepEqual(client.inject, ['locale', 'remote'])
+    globalThis.require = () => ({ createElement() {} })
+    assert.deepEqual(client.inject, ['locale', 'remote', 'slots', 'sessions', 'workspaces'])
     client.apply(ctx)
     await Promise.all(effects)
     assert.equal(registrations[0].namespace, 'dsh-ui-enhancements')
@@ -554,8 +613,9 @@ test('client apply registers bilingual copy and starts the sidebar enhancer', as
     assert.equal(registrations[0].dictionaries.en['archive.aria'], 'Archive session “{title}”')
     assert.deepEqual(
       remoteMounts[0].descriptors.map(descriptor => descriptor.method),
-      ['list', 'setEnabled'],
+      ['list', 'setEnabled', 'listArchived', 'readArchived', 'restore', 'delete'],
     )
+    assert.equal(remoteMounts.length, 1, 'a Remote package must be mounted once')
     const [listDescriptor, setEnabledDescriptor] = remoteMounts[0].descriptors
     assert.equal(listDescriptor.result.mode, 'strict')
     assert.deepEqual(listDescriptor.result.schema.parse({ entries: [] }), { entries: [] })
@@ -576,12 +636,13 @@ test('client apply registers bilingual copy and starts the sidebar enhancer', as
       () => setEnabledDescriptor.result.schema.parse({ entryId: 1, enabled: false }),
       /entryId/,
     )
-    assert.deepEqual(serviceLookups, ['remote.profilePluginToggles'])
+    assert.deepEqual(serviceLookups.sort(), ['remote.profilePluginToggles', 'remote.sessionManagement'])
     assert.equal(observed, true)
   } finally {
     globalThis.window = previous.window
     globalThis.document = previous.document
     globalThis.MutationObserver = previous.MutationObserver
+    globalThis.require = previous.require
   }
 })
 

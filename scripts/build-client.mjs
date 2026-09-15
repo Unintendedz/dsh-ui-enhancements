@@ -9,6 +9,7 @@ await build({
   format: 'cjs',
   platform: 'browser',
   target: 'es2022',
+  external: ['react'],
   legalComments: 'none',
   banner: {
     js: 'window.__ModuleLoader__.load({id:"dsh-ui-enhancements",factory:(require)=>{var module={exports:{}};var exports=module.exports;',

@@ -1,3 +1,6 @@
+import { createSessionManager, SESSION_MANAGEMENT_REMOTE, registerArchiveEntry } from './session-manager.js'
+export { createSessionManager } from './session-manager.js'
+
 const NS = 'dsh-ui-enhancements'
 const PINNED_STORAGE_KEY = 'dsh-ui-enhancements.pinned-session-ids.v1'
 const FLAT_SESSION_ORDER_KEY = '__flat_session_order__'
@@ -8,6 +11,28 @@ const zh = {
   'unpin.aria': '取消置顶会话“{title}”',
   'archive.aria': '归档会话“{title}”',
   'archive.failed': '归档失败',
+  'archives.title': '已归档',
+  'archives.description': '归档会保留对话。你可以查看内容、恢复，或立即删除。',
+  'archives.search': '搜索归档标题或工作区',
+  'archives.empty': '没有已归档的对话',
+  'archives.noMatches': '没有匹配的归档对话',
+  'archives.view': '查看',
+  'archives.restore': '恢复并打开',
+  'archives.preview': '文本预览；恢复后可在对话中查看完整内容。',
+  'archives.user': '你',
+  'archives.assistant': '助手',
+  'archives.loading': '正在加载…',
+  'archives.refresh': '刷新',
+  'manager.close': '关闭',
+  'manager.cancel': '取消',
+  'manager.retry': '重试',
+  'manager.failed': '操作失败，请重试：',
+  'delete.aria': '立即删除会话“{title}”',
+  'delete.action': '立即删除',
+  'delete.title': '立即删除“{title}”？',
+  'delete.description': '将停止这个对话并永久删除它的对话记录，无法恢复。工作区文件和其他分支会保留。',
+  'delete.pending': '正在删除…',
+  'delete.success': '对话已删除',
   'plugin.enable': '启用插件“{name}”',
   'plugin.disable': '停用插件“{name}”',
   'plugin.locked': '插件管理器“{name}”始终启用',
@@ -21,6 +46,28 @@ const en = {
   'unpin.aria': 'Unpin session “{title}”',
   'archive.aria': 'Archive session “{title}”',
   'archive.failed': 'Archive failed',
+  'archives.title': 'Archived',
+  'archives.description': 'Archived conversations are kept. View, restore, or delete them here.',
+  'archives.search': 'Search archived titles or workspaces',
+  'archives.empty': 'No archived conversations',
+  'archives.noMatches': 'No matching archived conversations',
+  'archives.view': 'View',
+  'archives.restore': 'Restore and open',
+  'archives.preview': 'Text preview. Restore the conversation to view its full content.',
+  'archives.user': 'You',
+  'archives.assistant': 'Assistant',
+  'archives.loading': 'Loading…',
+  'archives.refresh': 'Refresh',
+  'manager.close': 'Close',
+  'manager.cancel': 'Cancel',
+  'manager.retry': 'Retry',
+  'manager.failed': 'Could not complete the action. Try again: ',
+  'delete.aria': 'Delete session “{title}” now',
+  'delete.action': 'Delete now',
+  'delete.title': 'Delete “{title}” now?',
+  'delete.description': 'This stops the conversation and permanently deletes its conversation log. This cannot be undone. Workspace files and other branches are kept.',
+  'delete.pending': 'Deleting…',
+  'delete.success': 'Conversation deleted',
   'plugin.enable': 'Enable plugin “{name}”',
   'plugin.disable': 'Disable plugin “{name}”',
   'plugin.locked': 'Plugin manager “{name}” is always enabled',
@@ -29,7 +76,7 @@ const en = {
   'plugin.failed': 'Could not change plugin “{name}”; try again',
 }
 
-export const inject = ['locale', 'remote']
+export const inject = ['locale', 'remote', 'slots', 'sessions', 'workspaces']
 
 function nonEmptyString(value, field) {
   if (typeof value !== 'string' || value.trim() === '') {
@@ -232,13 +279,13 @@ function quickActionIcon(documentApi, kind, active = false) {
     return svg
   }
   svg.appendChild(svgElement(documentApi, 'path', {
-    d: 'M2.5 4.5h11M3.5 4.5l.8-2h7.4l.8 2v7.5a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1V4.5ZM6 7.5h4',
+    d: kind === 'delete' ? 'M3 4h10M6 4V2.5h4V4M4 4l.6 9h6.8l.6-9M6.5 6.5v4M9.5 6.5v4' : 'M2.5 4.5h11M3.5 4.5l.8-2h7.4l.8 2v7.5a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1V4.5ZM6 7.5h4',
     stroke: 'currentColor', 'stroke-width': '1.3', 'stroke-linecap': 'round', 'stroke-linejoin': 'round',
   }))
   return svg
 }
 
-export function mountSessionQuickActions(row, context, pinnedIds, t, onTogglePin) {
+export function mountSessionQuickActions(row, context, pinnedIds, t, onTogglePin, onRequestDelete) {
   if (typeof context?.archiveSession !== 'function') return false
   const nativeButton = row.querySelector('button')
   if (nativeButton === null) return false
@@ -254,6 +301,10 @@ export function mountSessionQuickActions(row, context, pinnedIds, t, onTogglePin
 
   const existing = actionHost.querySelector('[data-dsh-ui-enhancements-actions]')
   if (existing !== null) {
+    if (existing.currentContext.sessionId !== context.sessionId) existing.children[1].disabled = false
+    existing.currentContext = context
+    existing.onRequestDelete = onRequestDelete
+    existing.onTogglePin = onTogglePin
     const pin = existing.children[0]
     const archive = existing.children[1]
     const pinChanged = pin.getAttribute('aria-pressed') !== String(pinned)
@@ -265,12 +316,20 @@ export function mountSessionQuickActions(row, context, pinnedIds, t, onTogglePin
     const archiveLabel = t('archive.aria', { title: context.title })
     archive.setAttribute('aria-label', archiveLabel)
     archive.setAttribute('title', archiveLabel)
+    if (existing.children[2]) {
+      const label = t('delete.aria', { title: context.title })
+      existing.children[2].setAttribute('aria-label', label)
+      existing.children[2].setAttribute('title', label)
+    }
     return true
   }
 
   const actions = documentApi.createElement('span')
   actions.classList.add('dsh-ui-enhancements-row-actions')
   actions.setAttribute('data-dsh-ui-enhancements-actions', context.sessionId)
+  actions.currentContext = context
+  actions.onRequestDelete = onRequestDelete
+  actions.onTogglePin = onTogglePin
 
   const pin = documentApi.createElement('button')
   pin.setAttribute('type', 'button')
@@ -284,7 +343,7 @@ export function mountSessionQuickActions(row, context, pinnedIds, t, onTogglePin
   pin.addEventListener('click', (event) => {
     event.preventDefault()
     event.stopPropagation()
-    onTogglePin(context.sessionId)
+    actions.onTogglePin(actions.currentContext.sessionId)
   })
 
   const archive = documentApi.createElement('button')
@@ -301,7 +360,7 @@ export function mountSessionQuickActions(row, context, pinnedIds, t, onTogglePin
     if (archive.disabled) return
     archive.disabled = true
     try {
-      await context.archiveSession(context.sessionId)
+      await actions.currentContext.archiveSession(actions.currentContext.sessionId)
     } catch {
       archive.disabled = false
       archive.dataset.status = 'failed'
@@ -310,6 +369,23 @@ export function mountSessionQuickActions(row, context, pinnedIds, t, onTogglePin
   })
 
   actions.append(pin, archive)
+  if (typeof onRequestDelete === 'function') {
+    const deletion = documentApi.createElement('button')
+    deletion.setAttribute('type', 'button')
+    deletion.classList.add('dsh-ui-enhancements-row-action')
+    deletion.setAttribute('data-dsh-ui-enhancements-action', 'delete')
+    const label = t('delete.aria', { title: context.title })
+    deletion.setAttribute('aria-label', label)
+    deletion.setAttribute('title', label)
+    deletion.appendChild(quickActionIcon(documentApi, 'delete'))
+    deletion.addEventListener('click', event => {
+      event.preventDefault()
+      event.stopPropagation()
+      const { sessionId, title } = actions.currentContext
+      actions.onRequestDelete?.({ sessionId, title })
+    })
+    actions.appendChild(deletion)
+  }
   actionHost.insertBefore(actions, actionHost.firstChild)
   return true
 }
@@ -319,6 +395,7 @@ export function installSessionQuickActions(
   browser = window,
   documentApi = document,
   Observer = globalThis.MutationObserver,
+  onRequestDelete,
 ) {
   let pinnedIds = readPinnedSessionIds(browser.localStorage)
   let timer
@@ -328,7 +405,7 @@ export function installSessionQuickActions(
     for (const row of documentApi.querySelectorAll('[role="treeitem"]')) {
       const context = sessionContextFromElement(row)
       if (context === undefined || typeof context.archiveSession !== 'function') continue
-      mountSessionQuickActions(row, context, pinnedIds, t, togglePin)
+      mountSessionQuickActions(row, context, pinnedIds, t, togglePin, onRequestDelete)
       if (typeof context.setSessionOrder !== 'function') continue
       let accounts = seen.get(context.setSessionOrder)
       if (accounts === undefined) {
@@ -554,6 +631,49 @@ export function installStyles(documentApi = document) {
   cursor: pointer;
 }
 .dsh-ui-enhancements-row-action:hover { color: var(--dsw-alias-label-primary); }
+.dsh-ui-enhancements-row-action[data-dsh-ui-enhancements-action="delete"]:hover { color: var(--dsw-alias-state-error-primary); }
+.dsh-ui-enhancements-archive-entry {
+  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px;
+  padding: 8px 12px; border: 0; border-radius: 10px; cursor: pointer;
+  background: transparent; color: var(--dsw-alias-label-secondary); font: inherit;
+}
+.dsh-ui-enhancements-archive-entry:hover,
+.dsh-ui-enhancements-manager-button:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
+.dsh-ui-enhancements-archive-entry:focus-visible,
+.dsh-ui-enhancements-manager-button:focus-visible,
+.dsh-ui-enhancements-dialog input:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 2px; }
+.dsh-ui-enhancements-dialog {
+  box-sizing: border-box; width: min(720px, calc(100vw - 32px)); max-height: calc(100dvh - 48px);
+  padding: 24px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 16px;
+  background: var(--dsw-alias-bg-layer-1, Canvas); color: var(--dsw-alias-label-primary, CanvasText);
+  box-shadow: 0 12px 48px #0004; overflow: auto;
+}
+.dsh-ui-enhancements-dialog[open] { display: flex; flex-direction: column; gap: 16px; }
+.dsh-ui-enhancements-dialog::backdrop { background: #0008; }
+.dsh-ui-enhancements-dialog h2 { margin: 0; font-size: 19px; line-height: 1.4; overflow-wrap: anywhere; }
+.dsh-ui-enhancements-dialog h3 { margin: 0; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.dsh-ui-enhancements-dialog p { margin: 0; font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
+.dsh-ui-enhancements-dialog input {
+  box-sizing: border-box; width: 100%; min-height: 44px; padding: 10px 12px;
+  color: inherit; background: transparent; border: 1px solid var(--dsw-alias-border-l1); border-radius: 8px; font: inherit;
+}
+.dsh-ui-enhancements-archive-list,.dsh-ui-enhancements-preview { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.dsh-ui-enhancements-archive-row { padding: 16px 0; border-bottom: 1px solid var(--dsw-alias-border-l1); }
+.dsh-ui-enhancements-archive-info { min-width: 0; }
+.dsh-ui-enhancements-archive-info p { font-size: 12px; color: var(--dsw-alias-label-secondary); margin-top: 4px; }
+.dsh-ui-enhancements-archive-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.dsh-ui-enhancements-manager-button { min-height: 44px; padding: 8px 12px; border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 8px; color: inherit; background: transparent; font: inherit; font-size: 13px; cursor: pointer; }
+.dsh-ui-enhancements-manager-button:disabled { opacity: .55; cursor: wait; }
+.dsh-ui-enhancements-danger,.dsh-ui-enhancements-manager-error { color: var(--dsw-alias-state-error-primary); }
+.dsh-ui-enhancements-manager-error:empty { display: none; }
+.dsh-ui-enhancements-dialog-footer { display: flex; justify-content: flex-end; gap: 8px; flex: none; }
+.dsh-ui-enhancements-preview article { padding: 12px 0; border-bottom: 1px solid var(--dsw-alias-border-l1); }
+.dsh-ui-enhancements-preview p { white-space: pre-wrap; margin-top: 8px; }
+.dsh-ui-enhancements-manager-notice { position: fixed; bottom: max(24px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%);
+  z-index: 10000; padding: 12px 20px; border-radius: 10px; background: var(--dsw-alias-bg-layer-1, Canvas);
+  color: var(--dsw-alias-label-primary, CanvasText); border: 1px solid var(--dsw-alias-border-l1); box-shadow: 0 4px 20px #0003; }
+@media (max-width: 480px) { .dsh-ui-enhancements-dialog { padding: 16px; width: calc(100vw - 24px); } }
 .dsh-ui-enhancements-row-action:focus-visible {
   outline: 2px solid var(--dsw-alias-label-primary-bluish);
   outline-offset: 1px;
@@ -643,6 +763,8 @@ export function installStyles(documentApi = document) {
 .dsh-ui-enhancements-plugin-toggle[data-status="pending"] { opacity: .65; }
 .dsh-ui-enhancements-plugin-toggle[data-status="failed"] { color: var(--dsw-alias-label-error); }
 @media (hover: none) and (pointer: coarse) {
+  .dsh-ui-enhancements-row { min-height: 48px; }
+  .dsh-ui-enhancements-row-action { width: 44px; height: 44px; }
   .dsh-ui-enhancements-row .dsh-ui-enhancements-row-actions-host {
     width: auto;
     opacity: 1;
@@ -663,10 +785,12 @@ export function installStyles(documentApi = document) {
 export function apply(ctx) {
   ctx.effect(installStyles)
   ctx.effect(() => ctx.locale.register(NS, { zh, en }))
-  ctx.effect(() => installSessionQuickActions(ctx.locale.bind(NS)))
   ctx.effect(async () => {
+    const unmount = await ctx.remote.$mount({
+      package: NS, descriptors: [...PROFILE_PLUGIN_REMOTE.descriptors, ...SESSION_MANAGEMENT_REMOTE.descriptors],
+    })
+    const cleanups = []
     try {
-      const unmount = await ctx.remote.$mount(PROFILE_PLUGIN_REMOTE)
       const remote = ctx.get('remote.profilePluginToggles')
       if (remote === undefined) throw new Error('profile plugin Remote did not mount')
       const api = {
@@ -681,13 +805,30 @@ export function apply(ctx) {
           return result.value
         },
       }
-      const cleanup = installPluginToggles(ctx.locale.bind(NS), api)
+      cleanups.push(installPluginToggles(ctx.locale.bind(NS), api))
+      const sessionRemote = ctx.get('remote.sessionManagement')
+      const sessionApi = Object.fromEntries(['listArchived', 'readArchived', 'restore', 'delete'].map(method => [method, async (...args) => {
+        const result = await sessionRemote[method](...args)
+        if (!result.ok) throw new Error(result.error.message)
+        return result.value
+      }]))
+      const manager = createSessionManager(ctx.locale.bind(NS), sessionApi, async (result, openId) => {
+        ctx.workspaces.model.installArchived(result.archivedSessionIds)
+        if (result.deleted && ctx.sessions.list.getSnapshot().current === result.sessionId) ctx.sessions.clear()
+        await ctx.sessions.refresh()
+        if (openId) ctx.sessions.open(openId)
+      })
+      cleanups.push(() => manager.dispose())
+      cleanups.push(registerArchiveEntry(ctx, manager, ctx.locale.bind(NS)))
+      cleanups.push(installSessionQuickActions(ctx.locale.bind(NS), window, document, globalThis.MutationObserver, target => manager.confirmDelete(target)))
       return async () => {
-        cleanup()
+        for (const cleanup of cleanups.reverse()) cleanup()
         await unmount()
       }
     } catch (error) {
-      console.warn('dsh-ui-enhancements: plugin switch Remote unavailable', error)
+      for (const cleanup of cleanups.reverse()) cleanup()
+      await unmount()
+      throw error
     }
   })
 }
