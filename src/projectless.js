@@ -1,6 +1,6 @@
 import { createWorkspaceSidebar } from './workspace-sidebar.js'
+import { createWorkspaceChoice, VIRTUAL_WORKSPACE } from './workspace-choice.js'
 
-const VIRTUAL_WORKSPACE = '::dsh-no-workspace'
 const PREFIX = 'session-projectless-'
 function string(value) {
   if (typeof value !== 'string' || !value) throw new TypeError('Expected a non-empty string')
@@ -79,6 +79,7 @@ function decorateNativeSlot(ctx, key, decorate) {
 export function registerProjectless(ctx, root, prepare, t) {
   const { createElement: h, Fragment, useEffect, useState, useMemo, useCallback } = require('react')
   const navigation = ctx.uiWorkspace
+  const choices = createWorkspaceChoice(require('react'), t)
   const drafts = createProjectlessDrafts({ root, prepare, sessions: ctx.sessions, workspaces: ctx.workspaces, storage: window.sessionStorage })
   const connect = navigation.connectWorkspace
   const start = navigation.startSession
@@ -123,8 +124,10 @@ export function registerProjectless(ctx, root, prepare, t) {
         }, ...snapshot.items] }), [snapshot, sessionId, cwd, noWorkspaceLabel])
         return selector(value)
       }, [props.useWorkspaces, sessionId, cwd, noWorkspaceLabel])
+      let choiceOwner
       const renderSlot = (key, owner, options) => {
         if (key !== 'conversation.hero.workspace') return props.renderSlot(key, owner, options)
+        choiceOwner = owner
         return h(Fragment, null,
           props.renderSlot(key, { ...owner, useWorkspaces: useWorkspaceChoices }, options),
           error && h('span', { className: 'dsh-projectless-error', role: 'alert' },
@@ -133,8 +136,12 @@ export function registerProjectless(ctx, root, prepare, t) {
               else void selectWorkspace(VIRTUAL_WORKSPACE).catch(() => {})
             } }, t('manager.retry'))))
       }
-      return h(Native, { ...props, useWorkspaces: useWorkspaceChoices, renderSlot, selectWorkspace })
+      const renderSlotChain = (key, owner, options) => props.renderSlotChain(key, owner,
+        key === 'conversation.composer' && options?.fallback
+          ? { ...options, fallback: choices.composer(options.fallback, choiceOwner) } : options)
+      return h(Native, { ...props, useWorkspaces: useWorkspaceChoices, renderSlot, renderSlotChain, selectWorkspace })
     }))
+    cleanups.push(decorateNativeSlot(ctx, 'conversation.hero.workspace', choices.picker))
     cleanups.push(decorateNativeSlot(ctx, 'sidebar.workspaces', Native => createWorkspaceSidebar(require('react'), Native, t)))
     cleanups.push(decorateNativeSlot(ctx, 'conversation.session', Native => function CarriedDraft(props) {
       const draft = props.useInput(s => s.draft)

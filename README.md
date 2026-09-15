@@ -11,7 +11,9 @@ Small, focused UI enhancements for DeepSeek Harness.
 Select **New Session** and start typing. The composer defaults to **No workspace**; its existing workspace picker can still select or add a workspace. A workspace's own new-session action continues to start inside that workspace.
 
 - Conversations appear in the sidebar's **No workspace** group. These are ordinary, persistent DSH conversations with the native model picker, attachments, tools, history, search, branches, archive, and delete actions.
-- **No workspace** has a chat-bubble icon and a subtle tinted header. Its disclosure supports the keyboard, and its **+** action starts a no-workspace conversation.
+- **No workspace** uses the same chat-bubble icon in the sidebar, composer workspace button, and picker menu. Its disclosure supports the keyboard, and its **+** action starts a no-workspace conversation.
+- Before sending, hover or focus the selected workspace button and click **×** to switch directly to **No workspace**, carrying the draft and attachments. Touch devices keep **×** visible. This clears the new conversation's workspace choice; it does not delete the workspace.
+- The sidebar's subtle blue background marks the current conversation's workspace, including **No workspace**, even when collapsed. Inactive groups have no persistent highlight.
 - Each new conversation receives its own real working directory at `<DSH_HOME>/projectless/session-projectless-<uuid>`. The active profile determines the DSH home. No workspace is registered, and no existing project directory is used. See the storage location under **Settings → Conversations → No workspace**; the native **Open workspace in Finder** action opens the conversation's directory.
 - An empty draft is reused in the same browser tab, including after a reload. Once it has messages, **New Session** allocates another directory. Branches retain their source conversation's directory. Concurrent starts share one allocation; failed creation can retry the same identity. Late creation does not interrupt navigation to a different conversation.
 - Before sending, switching between **No workspace** and a workspace carries the text and attachments through DSH's native draft transfer. Carried text is synchronized to native draft storage for reload recovery. Unsent attachments use DSH's in-memory draft storage; send them before reloading.
@@ -36,7 +38,7 @@ Open **Settings → Plugins → Plugin list** to enable or disable every plugin 
 - DSH's built-in runtime entries remain read-only because disabling core services can make the Web UI or plugin manager unavailable.
 - A failed runtime update restores the previous persistent state and leaves the switch retryable.
 
-Version `0.5.1` requires DSH `0.1.5-rc.1` and its JSONL session backend. Restart DSH after installation so the plugin can track each conversation's native lifecycle.
+Version `0.5.2` requires DSH `0.1.5-rc.1` and its JSONL session backend. Restart DSH after installation so the plugin can track each conversation's native lifecycle.
 
 ### Session quick actions
 
@@ -68,12 +70,12 @@ The plugin adds no agent tools or conversation copies. Title fallback resolution
 
 DSH `0.1.5-rc.1` has no native restore/delete API. This release uses its registry serialization, native Agent handles, JSONL write leases, and SQLite search eviction. Revalidate these integrations before upgrading DSH. Restart DSH if a session was already active before the plugin loaded. Subagent sessions owned by another agent cannot be deleted directly.
 
-No-workspace support decorates the occupied native conversation/sidebar components and workspace navigation service without replacing the composer or its child slots. Workspace group ordering also adapts the native sidebar render functions because DSH has no group/row slots. These version-specific adapters are restored on unload and also require revalidation when DSH changes. The storage root and per-conversation directories must be real directories, not symbolic links.
+No-workspace support decorates the occupied native conversation/sidebar components and workspace navigation service without replacing the composer or its child slots. Workspace group ordering, selection highlights, and picker icons also adapt native render functions because DSH has no group/row or workspace-chip slots. These version-specific adapters are restored on unload and also require revalidation when DSH changes. The storage root and per-conversation directories must be real directories, not symbolic links.
 
 ## Install
 
 ```sh
-dsh plugin --profile web add github:Unintendedz/dsh-ui-enhancements#v0.5.1
+dsh plugin --profile web add github:Unintendedz/dsh-ui-enhancements#v0.5.2
 ```
 
 Restart the DSH Web service after installing or removing the plugin.
@@ -90,6 +92,8 @@ dsh plugin --profile web remove dsh-ui-enhancements
 npm install
 npm test
 ```
+
+The browser regression in `tests/browser/workspace-choice.js` checks direct clearing, shared icons, current-group highlighting, keyboard use, and draft transfer. Run it with `playwright-cli run-code --filename=tests/browser/workspace-choice.js` against a fresh isolated profile with synthetic **Alpha Workspace** and **Beta Workspace** fixtures. Its safety guard requires a temporary `dsh-workspace-choice-test-*` DSH home and a dedicated loopback port; never use an existing profile.
 
 ## License
 

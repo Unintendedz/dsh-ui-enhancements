@@ -50,10 +50,17 @@ export const ARCHIVE_STYLES = `
 .dsh-projectless-path { display:block; margin-top:8px; font-size:12px; color:var(--dsw-alias-label-secondary); overflow-wrap:anywhere; }
 .dsh-projectless-error { max-width:320px; color:var(--dsw-alias-state-error-primary); font-size:12px; overflow-wrap:anywhere; }
 .dsh-projectless-error button { min-height:32px; padding:4px 8px; border:0; border-radius:6px; color:inherit; background:var(--dsw-alias-interactive-bg-hover); cursor:pointer; }
-.dsh-projectless-group-row { background:color-mix(in srgb,var(--dsw-alias-state-business-primary) 8%,transparent); box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--dsw-alias-state-business-primary) 14%,transparent); border-radius:8px; }
-.dsh-projectless-group-row:hover { background:color-mix(in srgb,var(--dsw-alias-state-business-primary) 13%,transparent); }
-.dsh-projectless-group-row:focus-visible { outline:2px solid var(--dsw-alias-state-business-primary); outline-offset:-2px; }
-.dsh-projectless-group-row [data-dsh-projectless-icon] { color:var(--dsw-alias-state-business-primary); }
+.dsh-workspace-group-row[aria-current=true] { background:color-mix(in srgb,var(--dsw-alias-state-business-primary) 8%,transparent); box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--dsw-alias-state-business-primary) 14%,transparent); border-radius:8px; }
+.dsh-workspace-group-row[aria-current=true]:hover { background:color-mix(in srgb,var(--dsw-alias-state-business-primary) 13%,transparent); }
+.dsh-workspace-group-row:focus-visible { outline:2px solid var(--dsw-alias-state-business-primary); outline-offset:-2px; }
+.dsh-workspace-choice { display:inline-flex; align-items:center; gap:2px; min-width:0; max-width:min(100%,360px); }
+.dsh-workspace-choice>button:first-child { min-width:0; max-width:100%; }
+.dsh-workspace-choice [data-dsh-projectless-icon] { flex:none; }
+.dsh-workspace-clear { display:inline-flex; align-items:center; justify-content:center; flex:none; width:28px; height:28px; padding:0; border:0; border-radius:50%; background:transparent; color:var(--dsw-alias-label-secondary); cursor:pointer; opacity:0; pointer-events:none; }
+.dsh-workspace-choice:hover .dsh-workspace-clear,.dsh-workspace-choice:focus-within .dsh-workspace-clear { opacity:1; pointer-events:auto; }
+.dsh-workspace-clear:hover { background:var(--dsw-alias-interactive-bg-hover); color:var(--dsw-alias-label-primary); }
+.dsh-workspace-choice button:focus-visible { outline:2px solid var(--dsw-alias-state-business-primary); outline-offset:1px; }
+@media(hover:none),(pointer:coarse) { .dsh-workspace-clear { opacity:1; pointer-events:auto; width:44px; height:44px; } }
 .dsh-archives-sr { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
 .dsh-ui-enhancements-manager-button { min-height:32px; padding:6px 12px; border:1px solid var(--dsw-alias-border-l1); border-radius:8px; color:inherit; background:transparent; font:inherit; font-size:13px; cursor:pointer; }
 .dsh-ui-enhancements-manager-button:hover:not(:disabled) { background:var(--dsw-alias-interactive-bg-hover); }

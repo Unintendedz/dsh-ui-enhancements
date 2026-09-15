@@ -13,6 +13,7 @@ const STYLE_ID = 'dsh-ui-enhancements-style'
 const zh = {
   'projectless.label': '无工作区',
   'projectless.groupHint': '独立对话，不关联工作区',
+  'projectless.clear': '切换到无工作区',
   'projectless.failed': '无法开始对话：',
   'projectless.description': '新对话无需选择工作区。文件按对话分别保存到以下目录。',
   'archives.dateLocale': 'zh-CN',
@@ -68,6 +69,7 @@ const zh = {
 const en = {
   'projectless.label': 'No workspace',
   'projectless.groupHint': 'Standalone conversations without a workspace',
+  'projectless.clear': 'Switch to No workspace',
   'projectless.failed': 'Could not start a conversation:',
   'projectless.description': 'Start conversations without choosing a workspace. Files are saved in a separate folder per conversation under this directory.',
   'archives.dateLocale': 'en-US',

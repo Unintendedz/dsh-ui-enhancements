@@ -22,7 +22,7 @@ export function workspaceGroupOrder(list, workspaces, archivedSessionIds, orderB
   return groups.map(group => group.key)
 }
 
-function mapElements(React, value, visit, visitArray = items => items) {
+export function mapElements(React, value, visit, visitArray = items => items) {
   if (Array.isArray(value)) {
     const next = value.map(child => mapElements(React, child, visit, visitArray))
     return visitArray(next.every((child, index) => child === value[index]) ? value : next)
@@ -30,6 +30,17 @@ function mapElements(React, value, visit, visitArray = items => items) {
   if (!React.isValidElement(value)) return value
   const children = mapElements(React, value.props.children, visit, visitArray)
   return visit(children === value.props.children ? value : React.cloneElement(value, { children }))
+}
+
+export function projectlessIcon(React) {
+  const h = React.createElement
+  return h('svg', {
+    width: 16, height: 16, viewBox: '0 0 16 16', fill: 'none',
+    'aria-hidden': true, 'data-dsh-projectless-icon': true,
+  }, h('path', {
+    d: 'M3.5 2.5h9a1.5 1.5 0 0 1 1.5 1.5v6a1.5 1.5 0 0 1-1.5 1.5H7L3 14v-2.5A1.5 1.5 0 0 1 1.5 10V4a1.5 1.5 0 0 1 2-1.5Z',
+    stroke: 'currentColor', strokeWidth: 1.25, strokeLinecap: 'round', strokeLinejoin: 'round',
+  }), h('path', { d: 'M5 6h6M5 8.5h4', stroke: 'currentColor', strokeWidth: 1.25, strokeLinecap: 'round' }))
 }
 
 function groupHeader(section) {
@@ -46,21 +57,22 @@ export function createWorkspaceSidebar(React, NativeBrowser, t) {
   const rowAdapters = new WeakMap()
 
   function rowAdapter(NativeRow) {
-    if (!rowAdapters.has(NativeRow)) rowAdapters.set(NativeRow, function NoWorkspaceRow(props) {
-      const row = NativeRow(props)
+    if (!rowAdapters.has(NativeRow)) rowAdapters.set(NativeRow, function WorkspaceGroupRow(props) {
+      const rendered = NativeRow(props)
+      // Real workspace rows have a native hover card; preserve its anchor and
+      // behavior while decorating the same DOM row as the ungrouped variant.
+      const row = rendered.props.role === 'treeitem' ? rendered : rendered.props.anchor
+      const projectless = props.group.workspaceId === undefined
       const children = [...row.props.children]
-      children[0] = cloneElement(children[0], {}, h('svg', {
-        width: 16, height: 16, viewBox: '0 0 16 16', fill: 'none',
-        'aria-hidden': true, 'data-dsh-projectless-icon': true,
-      }, h('path', {
-        d: 'M3.5 2.5h9a1.5 1.5 0 0 1 1.5 1.5v6a1.5 1.5 0 0 1-1.5 1.5H7L3 14v-2.5A1.5 1.5 0 0 1 1.5 10V4a1.5 1.5 0 0 1 2-1.5Z',
-        stroke: 'currentColor', strokeWidth: 1.25, strokeLinecap: 'round', strokeLinejoin: 'round',
-      }), h('path', { d: 'M5 6h6M5 8.5h4', stroke: 'currentColor', strokeWidth: 1.25, strokeLinecap: 'round' })))
-      return cloneElement(row, {
-        className: `${row.props.className} dsh-projectless-group-row`,
-        title: t('projectless.groupHint'),
-        'aria-label': t('projectless.label'),
-        'aria-description': t('projectless.groupHint'),
+      if (projectless) children[0] = cloneElement(children[0], {}, projectlessIcon(React))
+      const decorated = cloneElement(row, {
+        className: `${row.props.className} dsh-workspace-group-row${projectless ? ' dsh-projectless-group-row' : ''}`,
+        'aria-current': props.group.containsCurrent || undefined,
+        ...(projectless ? {
+          title: t('projectless.groupHint'),
+          'aria-label': t('projectless.label'),
+          'aria-description': t('projectless.groupHint'),
+        } : {}),
         tabIndex: 0,
         onKeyDown: event => {
           if (event.target !== event.currentTarget) return
@@ -72,6 +84,7 @@ export function createWorkspaceSidebar(React, NativeBrowser, t) {
           }
         },
       }, children)
+      return row === rendered ? decorated : cloneElement(rendered, { anchor: decorated })
     })
     return rowAdapters.get(NativeRow)
   }
@@ -88,16 +101,15 @@ export function createWorkspaceSidebar(React, NativeBrowser, t) {
           const header = groupHeader(section)
           const { group } = header.props
           const children = [...section.props.children]
-          if (group.workspaceId === undefined) {
-            children[0] = h(rowAdapter(header.type), {
-              ...header.props, key: header.key,
+          children[0] = h(rowAdapter(header.type), {
+            ...header.props, key: header.key,
+            ...(group.workspaceId === undefined ? {
               onCreate: () => { props.setGroupExpanded('', true); props.startSession() },
-            })
-          } else if (props.orderBy === 'updated') {
+            } : {}),
             // Native workspace drag anchors use Host order. In automatic mode,
             // drag would appear to succeed then snap back to the activity order.
-            children[0] = cloneElement(header, { drag: undefined })
-          }
+            ...(props.orderBy === 'updated' ? { drag: undefined } : {}),
+          })
           return cloneElement(section, { 'data-dsh-workspace-group': group.key }, children)
         })
         return sections.sort((a, b) => (ranks.get(groupHeader(a).props.group.key) ?? Infinity)
