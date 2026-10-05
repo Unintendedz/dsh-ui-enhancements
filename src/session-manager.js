@@ -12,7 +12,13 @@ function archiveState(value) {
   return { archivedSessionIds: value.archivedSessionIds.map(id) }
 }
 function codec(name, parse) {
-  return { mode: 'strict', typeSymbol: `dsh-ui-enhancements#${name}`, schema: { parse } }
+  // DSH 0.2.0 replaced the bare `schema` field with a memoized `create()` factory.
+  let cached
+  return {
+    mode: 'strict',
+    typeSymbol: `dsh-ui-enhancements#${name}`,
+    create: () => (cached ??= { parse }),
+  }
 }
 const identity = { name: 'id', wire: 'id', source: 'json', codec: codec('SessionId', id) }
 function parseArchiveList(value) {

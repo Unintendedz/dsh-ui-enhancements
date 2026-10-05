@@ -1,6 +1,6 @@
 {
   "name": "dsh-ui-enhancements",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "description": "Small, focused UI enhancements for DeepSeek Harness",
   "main": "lib/index.js",
   "scripts": {
@@ -61,7 +61,7 @@
     "./lib/client.js"
   ],
   "peerDependencies": {
-    "@deepseek-ai/dsh-typert-protocol": "^0.1.5-rc.1"
+    "@deepseek-ai/dsh-typert-protocol": "^0.2.0-rc.2"
   },
   "dependencies": {
     "yaml": "2.9.0"

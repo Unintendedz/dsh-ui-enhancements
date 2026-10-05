@@ -1,11 +1,13 @@
-import { mapElements, projectlessIcon } from './workspace-sidebar.js'
+import { mapElements, projectlessIcon, VIRTUAL_WORKSPACE } from './workspace-sidebar.js'
 
-export const VIRTUAL_WORKSPACE = '::dsh-no-workspace'
+export { VIRTUAL_WORKSPACE }
 
 // Keep the native picker, directory flow, pending selection, and draft transfer.
 // DSH 0.1.5 exposes the picker slot but not its chip or menu item icons.
 export function createWorkspaceChoice(React, t) {
   const { createElement: h, cloneElement } = React
+  // The virtual workspace itself is published through the native workspace model
+  // (see installVirtualWorkspace); this adapter only dresses the picker chrome.
   const chips = new WeakMap()
   const flows = new WeakMap()
   function chipAdapter(NativeChip) {

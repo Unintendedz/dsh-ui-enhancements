@@ -179,7 +179,12 @@ const pluginToggleResultSchema = {
 }
 
 function strictCodec(typeSymbol, schema) {
-  return { mode: 'strict', typeSymbol, schema }
+  // DSH 0.2.0 replaced the bare `schema` field with a memoized `create()`
+  // factory that returns it. A codec still spelling `schema` fails the registry
+  // check, and the resulting mount rejection is swallowed, so nothing
+  // downstream ever applies.
+  let cached
+  return { mode: 'strict', typeSymbol, create: () => (cached ??= schema) }
 }
 
 const PROFILE_PLUGIN_REMOTE = {
@@ -290,6 +295,13 @@ export function sessionContextFromElement(element) {
       workspaces = props.workspaces
     }
     fiber = fiber.return
+  }
+  // DSH 0.2.0 keeps the session id in the DOM row key and no longer exposes
+  // `node.id` on the row fiber, so fall back to the attribute when the walk
+  // above found nothing. 0.1.5 rows keep using the fiber path.
+  if (sessionId === undefined && typeof element.getAttribute === 'function') {
+    const rowKey = element.getAttribute('data-row-key')
+    if (typeof rowKey === 'string' && rowKey.startsWith('session:')) sessionId = rowKey.slice('session:'.length)
   }
   if (sessionId === undefined) return undefined
   const workspace = Array.isArray(workspaces)
@@ -442,6 +454,7 @@ export function installSessionQuickActions(
   documentApi = document,
   Observer = globalThis.MutationObserver,
   onRequestDelete,
+  services = {},
 ) {
   let pinnedIds = readPinnedSessionIds(browser.localStorage)
   let timer
@@ -449,8 +462,15 @@ export function installSessionQuickActions(
   const sync = () => {
     const seen = new Map()
     for (const row of documentApi.querySelectorAll('[role="treeitem"]')) {
-      const context = sessionContextFromElement(row)
-      if (context === undefined || typeof context.archiveSession !== 'function') continue
+      const found = sessionContextFromElement(row)
+      if (found === undefined) continue
+      // DSH 0.2.0 rows no longer carry `archiveSession` on the fiber; take it
+      // from the client service so the hover actions stay available.
+      const context = {
+        ...found,
+        archiveSession: typeof found.archiveSession === 'function' ? found.archiveSession : services.archiveSession,
+      }
+      if (typeof context.archiveSession !== 'function') continue
       mountSessionQuickActions(row, context, pinnedIds, t, togglePin, onRequestDelete)
       if (typeof context.setSessionOrder !== 'function') continue
       let accounts = seen.get(context.setSessionOrder)
@@ -791,9 +811,17 @@ export function apply(ctx) {
   ctx.effect(installStyles)
   ctx.effect(() => ctx.locale.register(NS, { zh, en }))
   ctx.effect(async () => {
-    const unmount = await ctx.remote.$mount({
-      package: NS, descriptors: [...PROFILE_PLUGIN_REMOTE.descriptors, ...SESSION_MANAGEMENT_REMOTE.descriptors, ...PROJECTLESS_REMOTE.descriptors],
-    })
+    // A rejected mount never reaches the catch below — the gateway settles the
+    // effect instead — so surface it here or the whole plugin fails silently.
+    let unmount
+    try {
+      unmount = await ctx.remote.$mount({
+        package: NS, descriptors: [...PROFILE_PLUGIN_REMOTE.descriptors, ...SESSION_MANAGEMENT_REMOTE.descriptors, ...PROJECTLESS_REMOTE.descriptors],
+      })
+    } catch (error) {
+      console.error('[dsh-ui-enhancements] Remote mount failed:', error)
+      throw error
+    }
     const cleanups = []
     try {
       const remote = ctx.get('remote.profilePluginToggles')
@@ -831,12 +859,15 @@ export function apply(ctx) {
         if (!result.ok) throw new Error(result.error.message)
         return result.value
       }, ctx.locale.bind(NS)))
-      cleanups.push(installSessionQuickActions(ctx.locale.bind(NS), window, document, globalThis.MutationObserver, target => manager.confirmDelete(target)))
+      cleanups.push(installSessionQuickActions(ctx.locale.bind(NS), window, document, globalThis.MutationObserver, target => manager.confirmDelete(target), {
+        archiveSession: sessionId => ctx.uiWorkspace.archiveSession(sessionId),
+      }))
       return async () => {
         for (const cleanup of cleanups.reverse()) cleanup()
         await unmount()
       }
     } catch (error) {
+      console.error('[dsh-ui-enhancements] apply failed:', error)
       for (const cleanup of cleanups.reverse()) cleanup()
       await unmount()
       throw error

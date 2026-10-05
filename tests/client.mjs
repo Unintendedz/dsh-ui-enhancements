@@ -620,22 +620,25 @@ test('client apply registers bilingual copy and starts the sidebar enhancer', as
     assert.equal(remoteMounts.length, 1, 'a Remote package must be mounted once')
     const [listDescriptor, setEnabledDescriptor] = remoteMounts[0].descriptors
     assert.equal(listDescriptor.result.mode, 'strict')
-    assert.deepEqual(listDescriptor.result.schema.parse({ entries: [] }), { entries: [] })
-    assert.throws(() => listDescriptor.result.schema.parse({ entries: 'invalid' }), /entries/)
+    // DSH 0.2.0 requires a `create()` factory instead of a bare `schema` field.
+    assert.equal(typeof listDescriptor.result.create, 'function')
+    assert.equal(listDescriptor.result.create(), listDescriptor.result.create(), 'the codec factory memoizes its schema')
+    assert.deepEqual(listDescriptor.result.create().parse({ entries: [] }), { entries: [] })
+    assert.throws(() => listDescriptor.result.create().parse({ entries: 'invalid' }), /entries/)
     for (const parameter of setEnabledDescriptor.parameters) {
       assert.equal(parameter.codec.mode, 'strict')
     }
-    assert.equal(setEnabledDescriptor.parameters[0].codec.schema.parse('plugin-entry'), 'plugin-entry')
-    assert.throws(() => setEnabledDescriptor.parameters[0].codec.schema.parse(''), /entryId/)
-    assert.equal(setEnabledDescriptor.parameters[1].codec.schema.parse(false), false)
-    assert.throws(() => setEnabledDescriptor.parameters[1].codec.schema.parse('false'), /enabled/)
+    assert.equal(setEnabledDescriptor.parameters[0].codec.create().parse('plugin-entry'), 'plugin-entry')
+    assert.throws(() => setEnabledDescriptor.parameters[0].codec.create().parse(''), /entryId/)
+    assert.equal(setEnabledDescriptor.parameters[1].codec.create().parse(false), false)
+    assert.throws(() => setEnabledDescriptor.parameters[1].codec.create().parse('false'), /enabled/)
     assert.equal(setEnabledDescriptor.result.mode, 'strict')
     assert.deepEqual(
-      setEnabledDescriptor.result.schema.parse({ entryId: 'plugin-entry', enabled: false }),
+      setEnabledDescriptor.result.create().parse({ entryId: 'plugin-entry', enabled: false }),
       { entryId: 'plugin-entry', enabled: false },
     )
     assert.throws(
-      () => setEnabledDescriptor.result.schema.parse({ entryId: 1, enabled: false }),
+      () => setEnabledDescriptor.result.create().parse({ entryId: 1, enabled: false }),
       /entryId/,
     )
     assert.deepEqual(serviceLookups.sort(), ['remote.profilePluginToggles', 'remote.projectlessConversations', 'remote.sessionManagement'])

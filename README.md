@@ -14,7 +14,7 @@ Select **New Session** and start typing. The composer defaults to **No workspace
 - **No workspace** uses the same chat-bubble icon in the sidebar, composer workspace button, and picker menu. Its disclosure supports the keyboard, and its **+** action starts a no-workspace conversation.
 - Before sending, hover or focus the selected workspace button and click **×** to switch directly to **No workspace**, carrying the draft and attachments. Touch devices keep **×** visible. This clears the new conversation's workspace choice; it does not delete the workspace.
 - The sidebar's subtle blue background marks the current conversation's workspace, including **No workspace**, even when collapsed. Inactive groups have no persistent highlight.
-- Each new conversation receives its own real working directory at `<DSH_HOME>/projectless/session-projectless-<uuid>`. The active profile determines the DSH home. No workspace is registered, and no existing project directory is used. See the storage location under **Settings → Conversations → No workspace**; the native **Open workspace in Finder** action opens the conversation's directory.
+- Each new conversation receives its own real working directory at `<DSH_HOME>/projectless/session-projectless-<uuid>`. The active profile determines the DSH home. No workspace is registered and no existing project directory is used; the browser only presents the conversation as a **No workspace** virtual workspace entry, leaving DSH's workspace registry untouched. See the storage location under **Settings → Conversations → No workspace**; the native **Open workspace in Finder** action opens the conversation's directory.
 - An empty draft is reused in the same browser tab, including after a reload. Once it has messages, **New Session** allocates another directory. Branches retain their source conversation's directory. Concurrent starts share one allocation; failed creation can retry the same identity. Late creation does not interrupt navigation to a different conversation.
 - Before sending, switching between **No workspace** and a workspace carries the text and attachments through DSH's native draft transfer. Carried text is synchronized to native draft storage for reload recovery. Unsent attachments use DSH's in-memory draft storage; send them before reloading.
 - Archiving and restoring retain the same directory. Deleting a conversation removes its logs and list entries while keeping generated files and branches. Empty draft directories are also retained; this feature never automatically deletes working files.
@@ -38,7 +38,7 @@ Open **Settings → Plugins → Plugin list** to enable or disable every plugin 
 - DSH's built-in runtime entries remain read-only because disabling core services can make the Web UI or plugin manager unavailable.
 - A failed runtime update restores the previous persistent state and leaves the switch retryable.
 
-Version `0.5.2` requires DSH `0.1.5-rc.1` and its JSONL session backend. Restart DSH after installation so the plugin can track each conversation's native lifecycle.
+Version `0.6.0` requires DSH `0.2.0-rc.2`. Restart DSH after installing or upgrading so the host and browser halves reload together.
 
 ### Session quick actions
 
@@ -68,14 +68,16 @@ The plugin adds no agent tools or conversation copies. Title fallback resolution
 
 ### Compatibility
 
-DSH `0.1.5-rc.1` has no native restore/delete API. This release uses its registry serialization, native Agent handles, JSONL write leases, and SQLite search eviction. Revalidate these integrations before upgrading DSH. Restart DSH if a session was already active before the plugin loaded. Subagent sessions owned by another agent cannot be deleted directly.
+`0.6.0` is validated against DSH `0.2.0-rc.2` only. 0.2.0 changed three internal contracts this plugin relies on: descriptor value codecs moved from a `schema` field to a `create()` factory; the sidebar session list arrives as a `list` snapshot prop instead of a `useSessions` hook; and the hero and composer no longer flow through the `main.conversation` `renderSlot` pipeline. This release adapts to all three and replaces the render-prop injection with a virtual workspace entry (`::dsh-no-workspace`) in the client-side workspace model. The host registry gains no workspace.
 
-No-workspace support decorates the occupied native conversation/sidebar components and workspace navigation service without replacing the composer or its child slots. Workspace group ordering, selection highlights, and picker icons also adapt native render functions because DSH has no group/row or workspace-chip slots. These version-specific adapters are restored on unload and also require revalidation when DSH changes. The storage root and per-conversation directories must be real directories, not symbolic links.
+Session quick actions read the session id from the row's `data-row-key` on 0.2.0 and take the archive callback from `uiWorkspace`. The composer **×** shortcut relied on 0.1.5's composer chip pipeline; on 0.2.0 the same switch is made from the **No workspace** entry in the workspace picker.
+
+DSH `0.2.0-rc.2` has no native restore/delete API. This release uses its registry serialization, native Agent handles, JSONL write leases, and SQLite search eviction. Revalidate these integrations before upgrading DSH. Restart DSH if a session was already active before the plugin loaded. Subagent sessions owned by another agent cannot be deleted directly. The storage root and every conversation directory must be real directories, not symlinks.
 
 ## Install
 
 ```sh
-dsh plugin --profile web add github:Unintendedz/dsh-ui-enhancements#v0.5.2
+dsh plugin --profile web add github:Unintendedz/dsh-ui-enhancements#v0.6.0
 ```
 
 Restart the DSH Web service after installing or removing the plugin.

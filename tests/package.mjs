@@ -19,6 +19,6 @@ test('package exposes the Host toggle gateway and browser enhancer with a dedica
   assert.ok(manifest.dsh.client.inject.includes('@deepseek-ai/dsh-api-session-controller'))
   assert.ok(manifest.dsh.client.inject.includes('@deepseek-ai/dsh-api-workspace-controller'))
   assert.deepEqual(Object.keys(manifest.dependencies), ['yaml'])
-  assert.equal(manifest.peerDependencies['@deepseek-ai/dsh-typert-protocol'], '^0.1.5-rc.1')
+  assert.equal(manifest.peerDependencies['@deepseek-ai/dsh-typert-protocol'], '^0.2.0-rc.2')
   assert.match(patch, /name: dsh-ui-enhancements/)
 })

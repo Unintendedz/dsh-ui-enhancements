@@ -6,7 +6,15 @@ function string(value) {
   if (typeof value !== 'string' || !value) throw new TypeError('Expected a non-empty string')
   return value
 }
-const codec = (name, parse) => ({ mode: 'strict', typeSymbol: `dsh-ui-enhancements#${name}`, schema: { parse } })
+// DSH 0.2.0 replaced the bare `schema` field with a memoized `create()` factory.
+const codec = (name, parse) => {
+  let cached
+  return {
+    mode: 'strict',
+    typeSymbol: `dsh-ui-enhancements#${name}`,
+    create: () => (cached ??= { parse }),
+  }
+}
 export const PROJECTLESS_REMOTE = {
   package: 'dsh-ui-enhancements',
   descriptors: [
@@ -57,6 +65,61 @@ export function createProjectlessDrafts({ root, sessions, workspaces, prepare, s
   }
 }
 
+// DSH 0.2.0 gates the blank composer on the *selected workspace*, so a session
+// that belongs to no workspace stays stuck behind "Choose a workspace to start"
+// even when it is selected. Present the managed conversation to the native
+// client-side workspace model as a virtual workspace. The Host registry is never
+// touched, so no workspace is registered: the entry exists only in this browser.
+function installVirtualWorkspace(ctx, root, label, selectionStore) {
+  const model = ctx.workspaces?.model
+  if (!model) return () => {}
+  const membership = () => {
+    try {
+      const selected = selectionStore?.getSnapshot?.()?.sessionId
+      if (selected === undefined) return []
+      const summary = ctx.sessions?.list?.getSnapshot?.()?.byId?.[selected]
+      return summary && isProjectlessDirectory(summary.cwd, root) ? [selected] : []
+    } catch { return [] }
+  }
+  const sameMembers = (left, right) => left.length === right.length
+    && left.every((value, index) => value === right[index])
+  const apply = () => {
+    const sessionIds = membership()
+    try {
+      // `upsert` mutates the very store we subscribe to, so it must be a no-op
+      // unless the entry is missing or its membership actually changed.
+      const items = model.getSnapshot?.()?.items ?? []
+      const existing = items.find(item => item.workspaceId === VIRTUAL_WORKSPACE)
+      if (existing && sameMembers(existing.sessionIds ?? [], sessionIds)) return
+      const record = {
+        workspaceId: VIRTUAL_WORKSPACE,
+        title: label,
+        path: '',
+        sessionIds,
+        createdAt: '1970-01-01T00:00:00.000Z',
+        updatedAt: '1970-01-01T00:00:00.000Z',
+      }
+      if (typeof model.upsert === 'function') model.upsert(record)
+      else if (typeof model.upsertView === 'function') model.upsertView(record)
+    } catch (error) {
+      if (!installVirtualWorkspace.reported) {
+        installVirtualWorkspace.reported = true
+        console.log('[dsh-ui-enhancements] virtual workspace upsert failed: ' + String(error?.message ?? error).slice(0, 120))
+      }
+    }
+  }
+  const stops = []
+  for (const store of [selectionStore, ctx.sessions?.list]) {
+    if (typeof store?.subscribe !== 'function') continue
+    try { stops.push(store.subscribe(apply)) } catch {}
+  }
+  apply()
+  return () => {
+    for (const stop of stops) { try { stop?.() } catch {} }
+    try { model.remove?.(VIRTUAL_WORKSPACE) } catch {}
+  }
+}
+
 // DSH 0.1.5's occupied conversation slot owns its child declarations, so a
 // replacement registration would orphan the native composer. Decorate that
 // entry in place, retaining its store, injection, and child ownership. An inert
@@ -70,7 +133,7 @@ function decorateNativeSlot(ctx, key, decorate) {
     const decorated = decorate(original)
     entry.component = decorated
     let dispose
-    try { dispose = ctx.slots.register({ name: key, priority: Number.MAX_SAFE_INTEGER }, () => null) }
+    try { dispose = ctx.slots.register({ name: key, priority: Number.MAX_SAFE_INTEGER, id: `dsh-ui-enhancements#refresh-${key}` }, () => null) }
     catch (error) { entry.component = original; throw error }
     return () => { if (entry.component === decorated) entry.component = original; dispose() }
   })
@@ -97,6 +160,11 @@ export function registerProjectless(ctx, root, prepare, t) {
     if (navigation.startSession === startWrapper) navigation.startSession = start
   }]
   try {
+    // DSH 0.2.0 mounts the hero without the decorated conversation entry, so the
+    // workspace-less conversation is published to the native workspace model
+    // instead of being injected through the conversation's slot props.
+    const selectionStore = navigation.selection
+    cleanups.push(installVirtualWorkspace(ctx, root, t('projectless.label'), selectionStore))
     cleanups.push(decorateNativeSlot(ctx, 'main.conversation', Native => function ProjectlessConversation(props) {
       const { sessionId } = props
       const phase = props.useSessions(s => s.phase)
@@ -136,9 +204,11 @@ export function registerProjectless(ctx, root, prepare, t) {
               else void selectWorkspace(VIRTUAL_WORKSPACE).catch(() => {})
             } }, t('manager.retry'))))
       }
-      const renderSlotChain = (key, owner, options) => props.renderSlotChain(key, owner,
-        key === 'conversation.composer' && options?.fallback
-          ? { ...options, fallback: choices.composer(options.fallback, choiceOwner) } : options)
+      const renderSlotChain = (key, owner, options) => {
+        return props.renderSlotChain(key, owner,
+          key === 'conversation.composer' && options?.fallback
+            ? { ...options, fallback: choices.composer(options.fallback, choiceOwner) } : options)
+      }
       return h(Native, { ...props, useWorkspaces: useWorkspaceChoices, renderSlot, renderSlotChain, selectWorkspace })
     }))
     cleanups.push(decorateNativeSlot(ctx, 'conversation.hero.workspace', choices.picker))

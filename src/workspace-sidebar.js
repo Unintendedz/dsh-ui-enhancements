@@ -1,3 +1,7 @@
+// The browser-side identifier of the managed workspace-less conversation. It is
+// declared here because both the sidebar and the picker adapters need it.
+export const VIRTUAL_WORKSPACE = '::dsh-no-workspace'
+
 // Match DSH's visible membership rules. Expansion and pinned row order are
 // presentation choices and must not change a workspace's last activity.
 export function workspaceGroupOrder(list, workspaces, archivedSessionIds, orderBy = 'updated') {
@@ -62,7 +66,7 @@ export function createWorkspaceSidebar(React, NativeBrowser, t) {
       // Real workspace rows have a native hover card; preserve its anchor and
       // behavior while decorating the same DOM row as the ungrouped variant.
       const row = rendered.props.role === 'treeitem' ? rendered : rendered.props.anchor
-      const projectless = props.group.workspaceId === undefined
+      const projectless = props.group.workspaceId === undefined || props.group.workspaceId === VIRTUAL_WORKSPACE
       const children = [...row.props.children]
       if (projectless) children[0] = cloneElement(children[0], {}, projectlessIcon(React))
       const decorated = cloneElement(row, {
@@ -91,8 +95,10 @@ export function createWorkspaceSidebar(React, NativeBrowser, t) {
 
   function treeAdapter(NativeTree) {
     if (!treeAdapters.has(NativeTree)) treeAdapters.set(NativeTree, function OrderedWorkspaceTree(props) {
-      const list = props.useSessions(state => state)
-      const ranks = useMemo(() => new Map(workspaceGroupOrder(list, props.workspaces, props.archivedSessionIds, props.orderBy)
+      // DSH 0.2.0 passes the session-list snapshot as `props.list`; 0.1.5 passed
+      // a `useSessions` selector hook. Accept either.
+      const list = typeof props.useSessions === 'function' ? props.useSessions(state => state) : props.list
+      const ranks = useMemo(() => list === undefined ? new Map() : new Map(workspaceGroupOrder(list, props.workspaces, props.archivedSessionIds, props.orderBy)
         .map((key, index) => [key, index])), [list, props.workspaces, props.archivedSessionIds, props.orderBy])
       const tree = NativeTree(props)
       return mapElements(React, tree, element => element, items => {
