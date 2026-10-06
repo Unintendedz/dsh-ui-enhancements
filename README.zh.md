@@ -38,7 +38,7 @@
 - DSH 内置运行组件仍然只读，因为停用核心服务可能导致 Web 界面或插件管理器不可用。
 - 如果运行时更新失败，插件会恢复原有持久化状态，开关仍可重试。
 
-`0.6.0` 版本需要 DSH `0.2.0-rc.2`。安装或升级后请重启 DSH，以便宿主端与浏览器端代码同时重新加载。
+`0.6.1` 版本需要 DSH `0.2.0-rc.2`。安装或升级后请重启 DSH，以便宿主端与浏览器端代码同时重新加载。
 
 ### 会话快捷操作
 
@@ -68,16 +68,18 @@
 
 ### 兼容性
 
-`0.6.0` 只针对 DSH `0.2.0-rc.2` 验证。0.2.0 改动了本插件依赖的三处内部契约：descriptor 的值 codec 由 `schema` 字段改为 `create()` 工厂；侧栏会话列表由 `useSessions` 钩子改为 `list` 快照属性；hero 与输入框不再经由 `main.conversation` 的 `renderSlot` 管道下发。本版本按这三处改写，并以客户端工作区模型中的虚拟工作区条目（`::dsh-no-workspace`）替代原先的渲染属性注入——宿主注册表不写入任何工作区。
+`0.6.1` 只针对 DSH `0.2.0-rc.2` 验证。0.2.0 改动了本插件依赖的三处内部契约：descriptor 的值 codec 由 `schema` 字段改为 `create()` 工厂；侧栏会话列表由 `useSessions` 钩子改为 `list` 快照属性；hero 与输入框不再经由 `main.conversation` 的 `renderSlot` 管道下发。本版本按这三处改写，并以客户端工作区模型中的虚拟工作区条目（`::dsh-no-workspace`）替代原先的渲染属性注入——宿主注册表不写入任何工作区。
 
 会话行快捷操作在 0.2.0 上改从行元素的 `data-row-key` 取会话 ID、从 `uiWorkspace` 取归档回调。原生输入框的 **×** 一键切换依赖 0.1.5 的 composer chip 管道，0.2.0 上请直接用工作区选择器里的 **无工作区** 条目完成同样的切换。
+
+`0.6.1` 修复：0.2.0 还移除了 **新会话** 动作使用的 `navigation.sessions.clear()`，该调用会在点击处理中抛异常，使侧栏按钮与 ⌥⌘N 快捷键完全失效，本版本改为直接启动受管对话。同时修正了无工作区归属只覆盖当前会话的问题——那会让其余无工作区会话留在原生未分组区，出现两个同名 **无工作区** 分组。
 
 DSH `0.2.0-rc.2` 没有原生的恢复和删除接口，本版本复用其工作区串行写入、Agent 原生生命周期句柄、JSONL 写锁及 SQLite 搜索清理。升级 DSH 前需要重新验证这些集成。如果某个会话在插件加载前已经启动，请重启 DSH。由其他 Agent 管理的子代理会话不能直接删除。存储根目录及各对话子目录必须是真实目录，不能是符号链接。
 
 ## 安装
 
 ```sh
-dsh plugin --profile web add github:Unintendedz/dsh-ui-enhancements#v0.6.0
+dsh plugin --profile web add github:Unintendedz/dsh-ui-enhancements#v0.6.1
 ```
 
 安装或卸载后请重启 DSH Web 服务。

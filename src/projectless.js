@@ -50,7 +50,10 @@ export function createProjectlessDrafts({ root, sessions, workspaces, prepare, s
       const workspace = workspaces.list.getSnapshot()
       if (summary?.blank && isProjectlessDirectory(summary.cwd, root)
         && !workspace.archivedSessionIds.includes(remembered)
-        && !workspace.items.some(item => item.sessionIds.includes(remembered))) return Promise.resolve(remembered)
+        // The virtual workspace is this plugin's own bookkeeping, so it must not
+        // count as "the draft has been attached to a workspace": otherwise every
+        // New Session allocated another blank directory instead of reusing one.
+        && !workspace.items.some(item => item.workspaceId !== VIRTUAL_WORKSPACE && item.sessionIds.includes(remembered))) return Promise.resolve(remembered)
       retryId ??= uuid()
       inflight = (async () => {
         const location = await prepare(retryId)
@@ -75,10 +78,11 @@ function installVirtualWorkspace(ctx, root, label, selectionStore) {
   if (!model) return () => {}
   const membership = () => {
     try {
-      const selected = selectionStore?.getSnapshot?.()?.sessionId
-      if (selected === undefined) return []
-      const summary = ctx.sessions?.list?.getSnapshot?.()?.byId?.[selected]
-      return summary && isProjectlessDirectory(summary.cwd, root) ? [selected] : []
+      // Every managed conversation has to be claimed, not just the selected one:
+      // unclaimed ones fall back to the native ungrouped group, which renders
+      // under the same "No workspace" label and produced a duplicate group.
+      const byId = ctx.sessions?.list?.getSnapshot?.()?.byId ?? {}
+      return Object.keys(byId).filter(id => isProjectlessDirectory(byId[id]?.cwd, root))
     } catch { return [] }
   }
   const sameMembers = (left, right) => left.length === right.length
@@ -149,9 +153,19 @@ export function registerProjectless(ctx, root, prepare, t) {
   const connectWrapper = function (id) { return id === VIRTUAL_WORKSPACE ? drafts.connect() : connect.call(this, id) }
   const startWrapper = function (id) {
     if (id !== undefined) return start.call(this, id)
-    this.ctx.layout.beginNavigation()
-    this.sessions.clear()
-    this.ctx.layout.selectPanel(null)
+    // DSH 0.2.0 removed `navigation.sessions.clear()`. Calling it threw inside the
+    // click handler, which is why New Session and its shortcut did nothing at all.
+    // Start the managed workspace-less conversation instead.
+    try { this.ctx?.layout?.beginNavigation?.() } catch {}
+    try { this.ctx?.layout?.selectPanel?.(null) } catch {}
+    return Promise.resolve(drafts.connect())
+      .then(async (sessionId) => {
+        if (sessionId !== undefined && typeof navigation.openSession === 'function') {
+          await navigation.openSession(sessionId)
+        }
+        return sessionId
+      })
+      .catch(() => start.call(navigation))
   }
   navigation.connectWorkspace = connectWrapper
   navigation.startSession = startWrapper
