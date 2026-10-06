@@ -38,7 +38,7 @@ Open **Settings → Plugins → Plugin list** to enable or disable every plugin 
 - DSH's built-in runtime entries remain read-only because disabling core services can make the Web UI or plugin manager unavailable.
 - A failed runtime update restores the previous persistent state and leaves the switch retryable.
 
-Version `0.6.1` requires DSH `0.2.0-rc.2`. Restart DSH after installing or upgrading so the host and browser halves reload together.
+Version `0.6.2` requires DSH `0.2.0-rc.2`. Restart DSH after installing or upgrading so the host and browser halves reload together.
 
 ### Session quick actions
 
@@ -68,18 +68,20 @@ The plugin adds no agent tools or conversation copies. Title fallback resolution
 
 ### Compatibility
 
-`0.6.1` is validated against DSH `0.2.0-rc.2` only. 0.2.0 changed three internal contracts this plugin relies on: descriptor value codecs moved from a `schema` field to a `create()` factory; the sidebar session list arrives as a `list` snapshot prop instead of a `useSessions` hook; and the hero and composer no longer flow through the `main.conversation` `renderSlot` pipeline. This release adapts to all three and replaces the render-prop injection with a virtual workspace entry (`::dsh-no-workspace`) in the client-side workspace model. The host registry gains no workspace.
+`0.6.2` is validated against DSH `0.2.0-rc.2` only. 0.2.0 changed three internal contracts this plugin relies on: descriptor value codecs moved from a `schema` field to a `create()` factory; the sidebar session list arrives as a `list` snapshot prop instead of a `useSessions` hook; and the hero and composer no longer flow through the `main.conversation` `renderSlot` pipeline. This release adapts to all three and replaces the render-prop injection with a virtual workspace entry (`::dsh-no-workspace`) in the client-side workspace model. The host registry gains no workspace.
 
 Session quick actions read the session id from the row's `data-row-key` on 0.2.0 and take the archive callback from `uiWorkspace`. The composer **×** shortcut relied on 0.1.5's composer chip pipeline; on 0.2.0 the same switch is made from the **No workspace** entry in the workspace picker.
 
-`0.6.1` fixes: 0.2.0 also removed the `navigation.sessions.clear()` helper the New Session action used, and calling it threw inside the click handler, leaving the sidebar button and the ⌥⌘N shortcut completely inert; this release starts the managed conversation directly instead. It also stopped claiming only the selected conversation, which left the remaining workspace-less conversations in the native ungrouped area and produced two identically named **No workspace** groups.
+`0.6.2` fixes: 0.2.0 also removed the `navigation.sessions.clear()` helper the New Session action used, and calling it threw inside the click handler, leaving the sidebar button and the ⌥⌘N shortcut completely inert; this release starts the managed conversation directly instead. It also stopped claiming only the selected conversation, which left the remaining workspace-less conversations in the native ungrouped area and produced two identically named **No workspace** groups.
+
+0.2.0 draws the composer workspace button and the picker menu itself, in a component the plugin can no longer wrap, so the shared chat icon is applied through a DOM adapter: a button or menu item is decorated only while it shows this plugin's own **No workspace** label, and the native folder icon returns for a real workspace.
 
 DSH `0.2.0-rc.2` has no native restore/delete API. This release uses its registry serialization, native Agent handles, JSONL write leases, and SQLite search eviction. Revalidate these integrations before upgrading DSH. Restart DSH if a session was already active before the plugin loaded. Subagent sessions owned by another agent cannot be deleted directly. The storage root and every conversation directory must be real directories, not symlinks.
 
 ## Install
 
 ```sh
-dsh plugin --profile web add github:Unintendedz/dsh-ui-enhancements#v0.6.1
+dsh plugin --profile web add github:Unintendedz/dsh-ui-enhancements#v0.6.2
 ```
 
 Restart the DSH Web service after installing or removing the plugin.

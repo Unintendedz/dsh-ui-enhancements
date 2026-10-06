@@ -36,15 +36,83 @@ export function mapElements(React, value, visit, visitArray = items => items) {
   return visit(children === value.props.children ? value : React.cloneElement(value, { children }))
 }
 
+const ICON_PATHS = [
+  ['M3.5 2.5h9a1.5 1.5 0 0 1 1.5 1.5v6a1.5 1.5 0 0 1-1.5 1.5H7L3 14v-2.5A1.5 1.5 0 0 1 1.5 10V4a1.5 1.5 0 0 1 2-1.5Z', true],
+  ['M5 6h6M5 8.5h4', false],
+]
+
 export function projectlessIcon(React) {
   const h = React.createElement
   return h('svg', {
     width: 16, height: 16, viewBox: '0 0 16 16', fill: 'none',
     'aria-hidden': true, 'data-dsh-projectless-icon': true,
-  }, h('path', {
-    d: 'M3.5 2.5h9a1.5 1.5 0 0 1 1.5 1.5v6a1.5 1.5 0 0 1-1.5 1.5H7L3 14v-2.5A1.5 1.5 0 0 1 1.5 10V4a1.5 1.5 0 0 1 2-1.5Z',
-    stroke: 'currentColor', strokeWidth: 1.25, strokeLinecap: 'round', strokeLinejoin: 'round',
-  }), h('path', { d: 'M5 6h6M5 8.5h4', stroke: 'currentColor', strokeWidth: 1.25, strokeLinecap: 'round' }))
+  }, ICON_PATHS.map(([d, round]) => h('path', round
+    ? { d, stroke: 'currentColor', strokeWidth: 1.25, strokeLinecap: 'round', strokeLinejoin: 'round' }
+    : { d, stroke: 'currentColor', strokeWidth: 1.25, strokeLinecap: 'round' })))
+}
+
+// The same glyph without React, for the DOM adapters below.
+function projectlessIconElement(documentApi) {
+  const namespace = 'http://www.w3.org/2000/svg'
+  const svg = documentApi.createElementNS(namespace, 'svg')
+  for (const [name, value] of [['width', '16'], ['height', '16'], ['viewBox', '0 0 16 16'], ['fill', 'none'], ['aria-hidden', 'true'], ['data-dsh-projectless-icon', 'true']]) {
+    svg.setAttribute(name, value)
+  }
+  for (const [d, round] of ICON_PATHS) {
+    const path = documentApi.createElementNS(namespace, 'path')
+    path.setAttribute('d', d)
+    path.setAttribute('stroke', 'currentColor')
+    path.setAttribute('stroke-width', '1.25')
+    path.setAttribute('stroke-linecap', 'round')
+    if (round) path.setAttribute('stroke-linejoin', 'round')
+    svg.appendChild(path)
+  }
+  return svg
+}
+
+// DSH 0.2.0 renders the composer workspace button and the picker menu in a
+// component the plugin cannot wrap, so the shared chat icon is applied to the DOM
+// instead. A host keeps its native folder icon until it shows this plugin's own
+// workspace-less label, and gets that icon back for a real workspace.
+export function installProjectlessIcons(t, browser = window, documentApi = document, Observer = globalThis.MutationObserver) {
+  if (typeof documentApi?.querySelectorAll !== 'function' || typeof t !== 'function') return () => {}
+  const label = String(t('projectless.label') ?? '').trim()
+  if (label === '') return () => {}
+  const natives = new WeakMap()
+  const ours = element => element?.getAttribute?.('data-dsh-projectless-icon') === 'true'
+  const textOf = host => (host.textContent || '').replace(/\s+/g, ' ').trim()
+  const decorate = (host, wanted) => {
+    const svg = host.querySelector('svg')
+    if (wanted) {
+      if (svg !== null && ours(svg)) return
+      if (svg !== null) natives.set(host, svg)
+      const icon = projectlessIconElement(documentApi)
+      if (svg !== null) svg.replaceWith(icon)
+      else host.prepend(icon)
+      return
+    }
+    if (svg === null || !ours(svg)) return
+    const native = natives.get(host)
+    if (native !== undefined) svg.replaceWith(native)
+    else svg.remove()
+  }
+  const sync = () => {
+    for (const host of documentApi.querySelectorAll('button[aria-haspopup="menu"], [role="menuitem"]')) {
+      decorate(host, textOf(host) === label)
+    }
+  }
+  let timer
+  const schedule = () => {
+    if (timer !== undefined) return
+    timer = setTimeout(() => { timer = undefined; sync() }, 0)
+  }
+  const observer = typeof Observer === 'function' ? new Observer(schedule) : undefined
+  observer?.observe(documentApi.body, { childList: true, subtree: true, characterData: true })
+  sync()
+  return () => {
+    if (timer !== undefined) clearTimeout(timer)
+    observer?.disconnect()
+  }
 }
 
 function groupHeader(section) {
