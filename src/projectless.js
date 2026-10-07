@@ -68,6 +68,23 @@ export function createProjectlessDrafts({ root, sessions, workspaces, prepare, s
   }
 }
 
+// The native tree view nests a Workspace under the nearest registered Workspace
+// whose directory contains it. That test is `path.startsWith(parent + '/')`, so a
+// browser-side entry with an empty path — which is a prefix of every absolute
+// path — collected the whole sidebar as its children. Point the entry at the
+// managed root: it is a real directory that contains only this plugin's own
+// conversation folders, so nothing else can ever nest under it.
+export function virtualWorkspaceRecord(root, label, sessionIds = []) {
+  return {
+    workspaceId: VIRTUAL_WORKSPACE,
+    title: label,
+    path: root,
+    sessionIds,
+    createdAt: '1970-01-01T00:00:00.000Z',
+    updatedAt: '1970-01-01T00:00:00.000Z',
+  }
+}
+
 // DSH 0.2.0 gates the blank composer on the *selected workspace*, so a session
 // that belongs to no workspace stays stuck behind "Choose a workspace to start"
 // even when it is selected. Present the managed conversation to the native
@@ -94,15 +111,8 @@ function installVirtualWorkspace(ctx, root, label, selectionStore) {
       // unless the entry is missing or its membership actually changed.
       const items = model.getSnapshot?.()?.items ?? []
       const existing = items.find(item => item.workspaceId === VIRTUAL_WORKSPACE)
-      if (existing && sameMembers(existing.sessionIds ?? [], sessionIds)) return
-      const record = {
-        workspaceId: VIRTUAL_WORKSPACE,
-        title: label,
-        path: '',
-        sessionIds,
-        createdAt: '1970-01-01T00:00:00.000Z',
-        updatedAt: '1970-01-01T00:00:00.000Z',
-      }
+      if (existing && sameMembers(existing.sessionIds ?? [], sessionIds) && existing.path === root) return
+      const record = virtualWorkspaceRecord(root, label, sessionIds)
       if (typeof model.upsert === 'function') model.upsert(record)
       else if (typeof model.upsertView === 'function') model.upsertView(record)
     } catch (error) {

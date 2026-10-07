@@ -2,7 +2,7 @@ import { ARCHIVE_STYLES } from './archive-styles.js'
 import { createSessionManager, SESSION_MANAGEMENT_REMOTE, registerArchiveEntry } from './session-manager.js'
 import { PROJECTLESS_REMOTE, registerProjectless } from './projectless.js'
 import { installProjectlessIcons } from './workspace-sidebar.js'
-export { createProjectlessDrafts } from './projectless.js'
+export { createProjectlessDrafts, virtualWorkspaceRecord } from './projectless.js'
 export { workspaceGroupOrder } from './workspace-sidebar.js'
 export { createSessionManager } from './session-manager.js'
 

@@ -110,3 +110,18 @@ test('native creation failures retry the same allocated identity without discard
   assert.equal(await drafts.connect(), 'session-projectless-' + one)
   assert.equal(f.allocationCount(), 2)
 })
+
+test('the virtual workspace never claims real workspaces as tree children', () => {
+  assert.equal(typeof client.virtualWorkspaceRecord, 'function', 'the virtual workspace record builder is missing')
+  const root = '/home/me/.dsh/projectless'
+  const record = client.virtualWorkspaceRecord(root, 'No workspace', ['session-projectless-' + one])
+  assert.equal(record.path, root, 'the entry must carry the managed root, not an empty path')
+  // The native tree nests a workspace under the nearest entry whose directory
+  // contains it: `path.startsWith(parent + "/")`. An empty path passes that test
+  // for every absolute path, which is how the whole sidebar became one group.
+  const owns = (parent, path) => path.startsWith(parent + '/')
+  assert.equal(owns(record.path, '/Users/x/projects/turnitin'), false)
+  assert.equal(owns(record.path, '/Users/x/projects/security/turnitin'), false)
+  assert.equal(owns(record.path, record.path + '/session-projectless-' + one), true, 'it still owns the managed conversations')
+  assert.deepEqual(record.sessionIds, ['session-projectless-' + one])
+})
