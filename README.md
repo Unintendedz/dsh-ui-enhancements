@@ -24,9 +24,9 @@ The interaction follows [Codex's option to start without a project](https://lear
 
 ### Workspace activity order
 
-- The default **Last updated** view sorts workspace groups and **No workspace** together by their most recently updated visible conversation. Collapsed groups follow the same rule; pinned conversations do not pin their workspace. Empty workspaces fall back to their creation time, and ties retain Host order.
+- **No workspace** is a fixed anchor: it always leads the sidebar, and its own activity never moves it. The remaining groups follow their most recently updated visible conversation. Collapsed groups follow the same rule; pinned conversations do not pin their workspace. Empty workspaces fall back to their creation time, and ties retain Host order.
 - Activity, archive, restore, delete, and membership changes update the order from the existing session feed. Reordering keeps the same group elements, expansion state, and active draft without reloading the session list.
-- **View options → Manual** retains DSH's stored workspace order and workspace drag controls. Automatic mode disables workspace dragging; switch to Manual to arrange groups yourself. The native flat conversation view is unchanged.
+- **View options → Manual** retains DSH's stored workspace order and workspace drag controls. **No workspace** keeps the first slot in both modes and offers no drag handle, because its position is not part of Host order and dragging it could only look inert. Automatic mode disables workspace dragging; switch to Manual to arrange groups yourself. The native flat conversation view is unchanged.
 
 ### Profile plugin switches
 
@@ -38,7 +38,7 @@ Open **Settings → Plugins → Plugin list** to enable or disable every plugin 
 - DSH's built-in runtime entries remain read-only because disabling core services can make the Web UI or plugin manager unavailable.
 - A failed runtime update restores the previous persistent state and leaves the switch retryable.
 
-Version `0.6.2` requires DSH `0.2.0-rc.2`. Restart DSH after installing or upgrading so the host and browser halves reload together.
+Version `0.6.3` requires DSH `0.2.0-rc.2`. Restart DSH after installing or upgrading so the host and browser halves reload together.
 
 ### Session quick actions
 
@@ -68,11 +68,13 @@ The plugin adds no agent tools or conversation copies. Title fallback resolution
 
 ### Compatibility
 
-`0.6.2` is validated against DSH `0.2.0-rc.2` only. 0.2.0 changed three internal contracts this plugin relies on: descriptor value codecs moved from a `schema` field to a `create()` factory; the sidebar session list arrives as a `list` snapshot prop instead of a `useSessions` hook; and the hero and composer no longer flow through the `main.conversation` `renderSlot` pipeline. This release adapts to all three and replaces the render-prop injection with a virtual workspace entry (`::dsh-no-workspace`) in the client-side workspace model. The host registry gains no workspace.
+`0.6.3` is validated against DSH `0.2.0-rc.2` only. 0.2.0 changed three internal contracts this plugin relies on: descriptor value codecs moved from a `schema` field to a `create()` factory; the sidebar session list arrives as a `list` snapshot prop instead of a `useSessions` hook; and the hero and composer no longer flow through the `main.conversation` `renderSlot` pipeline. This release adapts to all three and replaces the render-prop injection with a virtual workspace entry (`::dsh-no-workspace`) in the client-side workspace model. The host registry gains no workspace.
 
 Session quick actions read the session id from the row's `data-row-key` on 0.2.0 and take the archive callback from `uiWorkspace`. The composer **×** shortcut relied on 0.1.5's composer chip pipeline; on 0.2.0 the same switch is made from the **No workspace** entry in the workspace picker.
 
 `0.6.2` fixes: 0.2.0 also removed the `navigation.sessions.clear()` helper the New Session action used, and calling it threw inside the click handler, leaving the sidebar button and the ⌥⌘N shortcut completely inert; this release starts the managed conversation directly instead. It also stopped claiming only the selected conversation, which left the remaining workspace-less conversations in the native ungrouped area and produced two identically named **No workspace** groups.
+
+`0.6.3` fixes: **No workspace** was sorted by activity together with real workspaces, so a busy workspace could push it down, while the **Last updated** view disables group dragging — which made "dragging No workspace" look completely inert. The workspace-less anchor now leads every order mode (the native ungrouped bucket renders under the same label and travels with it), activity order only decides the groups below it, and the anchor row no longer offers a drag handle it cannot honor.
 
 0.2.0 draws the composer workspace button and the picker menu itself, in a component the plugin can no longer wrap, so the shared chat icon is applied through a DOM adapter: a button or menu item is decorated only while it shows this plugin's own **No workspace** label, and the native folder icon returns for a real workspace.
 
@@ -81,7 +83,7 @@ DSH `0.2.0-rc.2` has no native restore/delete API. This release uses its registr
 ## Install
 
 ```sh
-dsh plugin --profile web add github:Unintendedz/dsh-ui-enhancements#v0.6.2
+dsh plugin --profile web add github:Unintendedz/dsh-ui-enhancements#v0.6.3
 ```
 
 Restart the DSH Web service after installing or removing the plugin.

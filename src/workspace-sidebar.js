@@ -2,6 +2,16 @@
 // declared here because both the sidebar and the picker adapters need it.
 export const VIRTUAL_WORKSPACE = '::dsh-no-workspace'
 
+// The two groups that carry the workspace-less label: this plugin's virtual
+// workspace, and the native ungrouped bucket that renders under the same name.
+// They are fixed anchors, not sortable entries, so the sidebar keeps them
+// together at the top in every order mode.
+export const PINNED_GROUP_KEYS = [VIRTUAL_WORKSPACE, '']
+
+export function isPinnedGroupKey(key) {
+  return PINNED_GROUP_KEYS.includes(key)
+}
+
 // Match DSH's visible membership rules. Expansion and pinned row order are
 // presentation choices and must not change a workspace's last activity.
 export function workspaceGroupOrder(list, workspaces, archivedSessionIds, orderBy = 'updated') {
@@ -23,7 +33,13 @@ export function workspaceGroupOrder(list, workspaces, archivedSessionIds, orderB
   const loose = list.ids.map(id => list.byId[id]).filter(session => visible(session) && !accounted.has(session.id))
   if (loose.length) groups.push({ key: '', time: latest(loose) })
   if (orderBy === 'updated') groups.sort((a, b) => b.time - a.time)
-  return groups.map(group => group.key)
+  const keys = groups.map(group => group.key)
+  // The workspace-less anchor leads every mode: activity decides only the
+  // groups below it, so a busy workspace can never push it down.
+  return [
+    ...PINNED_GROUP_KEYS.filter(key => keys.includes(key)),
+    ...keys.filter(key => !isPinnedGroupKey(key)),
+  ]
 }
 
 export function mapElements(React, value, visit, visitArray = items => items) {
@@ -181,8 +197,10 @@ export function createWorkspaceSidebar(React, NativeBrowser, t) {
               onCreate: () => { props.setGroupExpanded('', true); props.startSession() },
             } : {}),
             // Native workspace drag anchors use Host order. In automatic mode,
-            // drag would appear to succeed then snap back to the activity order.
-            ...(props.orderBy === 'updated' ? { drag: undefined } : {}),
+            // drag would appear to succeed then snap back to the activity
+            // order; the pinned workspace-less anchor cannot move in either
+            // mode, so it never offers the gesture.
+            ...(props.orderBy === 'updated' || isPinnedGroupKey(group.key) ? { drag: undefined } : {}),
           })
           return cloneElement(section, { 'data-dsh-workspace-group': group.key }, children)
         })

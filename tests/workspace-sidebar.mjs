@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import * as client from '../src/client.js'
+import { VIRTUAL_WORKSPACE } from '../src/workspace-sidebar.js'
 
 function fixture() {
   assert.equal(typeof client.workspaceGroupOrder, 'function', 'workspace recency ordering is missing')
@@ -17,14 +18,25 @@ function fixture() {
   return { list, workspaces, order: (archived = [], mode = 'updated') => client.workspaceGroupOrder(list, workspaces, archived, mode) }
 }
 
-test('workspace groups and no-workspace conversations share one newest-first order', () => {
+test('the no-workspace group leads and the workspaces below it stay newest-first', () => {
   const f = fixture()
   assert.deepEqual(f.order(), ['', 'b', 'a'])
   f.list.byId.a1.updatedAt = 400
-  assert.deepEqual(f.order(), ['a', '', 'b'])
+  assert.deepEqual(f.order(), ['', 'a', 'b'])
   f.list.byId.b1.updatedAt = 500
-  assert.deepEqual(f.order(), ['b', 'a', ''])
+  assert.deepEqual(f.order(), ['', 'b', 'a'])
   assert.deepEqual(f.workspaces.map(item => item.workspaceId), ['a', 'b'], 'host order must not be mutated')
+})
+
+test('the managed workspace-less group stays first even when its conversations are the oldest', () => {
+  const f = fixture()
+  f.workspaces.unshift({ workspaceId: VIRTUAL_WORKSPACE, createdAt: '1970-01-01T00:00:00Z', sessionIds: ['p1'] })
+  f.list.ids.push('p1')
+  f.list.byId.p1 = { id: 'p1', updatedAt: 1, blank: false }
+  assert.deepEqual(f.order(), [VIRTUAL_WORKSPACE, '', 'b', 'a'])
+  f.list.byId.a1.updatedAt = 9999
+  assert.deepEqual(f.order(), [VIRTUAL_WORKSPACE, '', 'a', 'b'], 'activity still orders the groups under the anchor')
+  assert.deepEqual(f.order([], 'manual'), [VIRTUAL_WORKSPACE, '', 'a', 'b'], 'the anchor also leads host order')
 })
 
 test('archived conversations, hidden drafts, and subagents do not promote a group', () => {
@@ -34,7 +46,7 @@ test('archived conversations, hidden drafts, and subagents do not promote a grou
   f.list.byId.a2.blank = true
   assert.deepEqual(f.order(), ['', 'b', 'a'])
   f.list.current = 'a2'
-  assert.deepEqual(f.order(), ['a', '', 'b'], 'the visible current draft counts as activity')
+  assert.deepEqual(f.order(), ['', 'a', 'b'], 'the visible current draft counts as activity')
   f.list.byId.a2.origin = 'subagent'
   assert.deepEqual(f.order(), ['', 'b', 'a'])
 })
@@ -53,15 +65,16 @@ test('ties keep host order and manual mode keeps the original group order', () =
   const f = fixture()
   f.list.byId.a1.updatedAt = 300
   f.list.byId.b1.updatedAt = 300
-  assert.deepEqual(f.order(), ['a', 'b', ''])
+  assert.deepEqual(f.order(), ['', 'a', 'b'])
   f.list.byId.loose.updatedAt = 999
-  assert.deepEqual(f.order([], 'manual'), ['a', 'b', ''])
+  assert.deepEqual(f.order([], 'manual'), ['', 'a', 'b'])
 })
 
 test('empty workspaces fall back to creation time; invalid dates remain stable', () => {
   const f = fixture()
   f.workspaces.push({workspaceId: 'empty', sessionIds: [], createdAt: '2026-01-03T00:00:00Z'})
-  assert.equal(f.order()[0], 'empty')
+  assert.equal(f.order()[0], '', 'the workspace-less anchor keeps the first slot')
+  assert.equal(f.order()[1], 'empty')
   f.workspaces[2].createdAt = 'unknown'
   assert.equal(f.order().at(-1), 'empty')
 })
