@@ -10,7 +10,7 @@ Small, focused UI enhancements for DeepSeek Harness.
 
 Select **New Session** and start typing. The composer defaults to **No workspace**; its existing workspace picker can still select or add a workspace. A workspace's own new-session action continues to start inside that workspace.
 
-- Conversations appear in the sidebar's **No workspace** group. These are ordinary, persistent DSH conversations with the native model picker, attachments, tools, history, search, branches, archive, and delete actions.
+- Conversations appear in the sidebar's **No workspace** group. These are ordinary, persistent DSH conversations with the native model picker, attachments, tools, history, search, branches, and archive, plus the delete row this plugin contributes to the session row's "..." menu.
 - **No workspace** uses the same chat-bubble icon in the sidebar, composer workspace button, and picker menu. Its disclosure supports the keyboard, and its **+** action starts a no-workspace conversation.
 - Before sending, hover or focus the selected workspace button and click **×** to switch directly to **No workspace**, carrying the draft and attachments. Touch devices keep **×** visible. This clears the new conversation's workspace choice; it does not delete the workspace.
 - The sidebar's subtle blue background marks the current conversation's workspace, including **No workspace**, even when collapsed. Inactive groups have no persistent highlight.
@@ -38,19 +38,16 @@ Open **Settings → Plugins → Plugin list** to enable or disable every plugin 
 - DSH's built-in runtime entries remain read-only because disabling core services can make the Web UI or plugin manager unavailable.
 - A failed runtime update restores the previous persistent state and leaves the switch retryable.
 
-Version `0.6.4` requires DSH `0.2.0-rc.2`. Restart DSH after installing or upgrading so the host and browser halves reload together.
+Version `0.7.0` requires DSH `0.2.0-rc.2`. Restart DSH after installing or upgrading so the host and browser halves reload together.
 
-### Session quick actions
+### Deleting from the session row menu
 
-Hover a populated session row to reveal **Pin / Unpin**, **Archive**, and **Delete now** beside the native menu.
+DSH already ships **Pin**, **Rename**, **Fork**, and **Archive** in a session row's "..." menu, and the hover buttons at the end of the row are the same set of actions. This plugin no longer draws its own pin and archive buttons; it contributes one **Delete now** row after the native archive entry.
 
-- Pinned sessions stay at the top of their workspace group or the flat list.
-- Pin preferences stay in the current browser's local storage.
-- Archive reuses DSH's native, non-destructive archive action.
-- Delete now opens one confirmation dialog, with **Cancel** focused first. Confirming stops that conversation, removes all of its JSONL log generations and its workspace/archive/search records, and updates the sidebar through DSH’s removal event. Failed operations display an error and can be retried.
+- That row registers into DSH's `sidebar.workspaces.session.menu.item` slot, after the native entries and behind its own separator, styled like a shipped menu row (danger colors, hover fill, keyboard reachable).
+- Delete now opens one confirmation dialog, with **Cancel** focused first. Confirming stops that conversation, removes all of its JSONL log generations and its workspace/archive/search records, and updates the sidebar through DSH's removal event. Failed operations display an error and can be retried.
 - Deletion targets that session only. Workspace files, independent branches, and shared attachment blobs are retained. It does not move logs to a trash folder and cannot be undone.
-- Running sessions keep stable hover actions while their status updates.
-- Keyboard focus and coarse-pointer devices can also reach the actions.
+- Pinning and archiving follow DSH's native behavior: the plugin keeps no pin list of its own and no longer rewrites the saved session order.
 
 ### Archived conversations
 
@@ -68,9 +65,11 @@ The plugin adds no agent tools or conversation copies. Title fallback resolution
 
 ### Compatibility
 
-`0.6.4` is validated against DSH `0.2.0-rc.2` only. 0.2.0 changed three internal contracts this plugin relies on: descriptor value codecs moved from a `schema` field to a `create()` factory; the sidebar session list arrives as a `list` snapshot prop instead of a `useSessions` hook; and the hero and composer no longer flow through the `main.conversation` `renderSlot` pipeline. This release adapts to all three and replaces the render-prop injection with a virtual workspace entry (`::dsh-no-workspace`) in the client-side workspace model. The host registry gains no workspace.
+`0.7.0` is validated against DSH `0.2.0-rc.2` only. 0.2.0 changed three internal contracts this plugin relies on: descriptor value codecs moved from a `schema` field to a `create()` factory; the sidebar session list arrives as a `list` snapshot prop instead of a `useSessions` hook; and the hero and composer no longer flow through the `main.conversation` `renderSlot` pipeline. This release adapts to all three and replaces the render-prop injection with a virtual workspace entry (`::dsh-no-workspace`) in the client-side workspace model. The host registry gains no workspace.
 
-Session quick actions read the session id from the row's `data-row-key` on 0.2.0 and take the archive callback from `uiWorkspace`. The composer **×** shortcut relied on 0.1.5's composer chip pipeline; on 0.2.0 the same switch is made from the **No workspace** entry in the workspace picker.
+Pin, rename, fork, and archive are entries of DSH `0.2.0-rc.2`'s `sidebar.workspaces.session.menu.item` and `sidebar.workspaces.session.row.action` slots; this plugin's delete row now registers into that same list instead of rewriting row fibers or hover buttons. The composer **×** shortcut relied on 0.1.5's composer chip pipeline; on 0.2.0 the same switch is made from the **No workspace** entry in the workspace picker.
+
+`0.7.0` changes: the plugin used to draw its own **Pin** and **Archive** buttons beside the native menu and to keep a pin list in browser storage that it wrote back over the saved session order, fighting the native pin. Both buttons are gone in favor of DSH's native row buttons, and **Delete now** moved from the hover strip into the session row's "..." menu, after the native archive row and behind a separator.
 
 `0.6.2` fixes: 0.2.0 also removed the `navigation.sessions.clear()` helper the New Session action used, and calling it threw inside the click handler, leaving the sidebar button and the ⌥⌘N shortcut completely inert; this release starts the managed conversation directly instead. It also stopped claiming only the selected conversation, which left the remaining workspace-less conversations in the native ungrouped area and produced two identically named **No workspace** groups.
 
@@ -85,7 +84,7 @@ DSH `0.2.0-rc.2` has no native restore/delete API. This release uses its registr
 ## Install
 
 ```sh
-dsh plugin --profile web add github:Unintendedz/dsh-ui-enhancements#v0.6.4
+dsh plugin --profile web add github:Unintendedz/dsh-ui-enhancements#v0.7.0
 ```
 
 Restart the DSH Web service after installing or removing the plugin.

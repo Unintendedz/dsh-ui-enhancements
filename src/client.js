@@ -1,14 +1,14 @@
 import { ARCHIVE_STYLES } from './archive-styles.js'
 import { createSessionManager, SESSION_MANAGEMENT_REMOTE, registerArchiveEntry } from './session-manager.js'
+import { registerSessionDeleteEntry } from './session-menu.js'
 import { PROJECTLESS_REMOTE, registerProjectless } from './projectless.js'
 import { installProjectlessIcons } from './workspace-sidebar.js'
 export { createProjectlessDrafts, virtualWorkspaceRecord } from './projectless.js'
 export { workspaceGroupOrder } from './workspace-sidebar.js'
 export { createSessionManager } from './session-manager.js'
+export { registerSessionDeleteEntry, createDeleteMenuItem } from './session-menu.js'
 
 const NS = 'dsh-ui-enhancements'
-const PINNED_STORAGE_KEY = 'dsh-ui-enhancements.pinned-session-ids.v1'
-const FLAT_SESSION_ORDER_KEY = '__flat_session_order__'
 const STYLE_ID = 'dsh-ui-enhancements-style'
 
 const zh = {
@@ -32,10 +32,6 @@ const zh = {
   'archives.created': '创建于：',
   'archives.noText': '没有可预览的文本内容',
 
-  'pin.aria': '置顶会话“{title}”',
-  'unpin.aria': '取消置顶会话“{title}”',
-  'archive.aria': '归档会话“{title}”',
-  'archive.failed': '归档失败',
   'archives.title': '归档对话',
   'archives.description': '归档的对话保留在这里，不会出现在工作区列表中。',
   'archives.search': '搜索归档标题或工作区',
@@ -53,7 +49,6 @@ const zh = {
   'manager.cancel': '取消',
   'manager.retry': '重试',
   'manager.failed': '操作失败，请重试：',
-  'delete.aria': '立即删除会话“{title}”',
   'delete.action': '立即删除',
   'delete.title': '立即删除“{title}”？',
   'delete.description': '将停止这个对话并永久删除它的对话记录，无法恢复。工作区文件和其他分支会保留。',
@@ -88,10 +83,6 @@ const en = {
   'archives.created': 'Created: ',
   'archives.noText': 'No text to preview',
 
-  'pin.aria': 'Pin session “{title}”',
-  'unpin.aria': 'Unpin session “{title}”',
-  'archive.aria': 'Archive session “{title}”',
-  'archive.failed': 'Archive failed',
   'archives.title': 'Archived conversations',
   'archives.description': 'Archived conversations are kept here and hidden from workspace lists.',
   'archives.search': 'Search archived titles or workspaces',
@@ -109,7 +100,6 @@ const en = {
   'manager.cancel': 'Cancel',
   'manager.retry': 'Retry',
   'manager.failed': 'Could not complete the action. Try again: ',
-  'delete.aria': 'Delete session “{title}” now',
   'delete.action': 'Delete now',
   'delete.title': 'Delete “{title}” now?',
   'delete.description': 'This stops the conversation and permanently deletes its conversation log. This cannot be undone. Workspace files and other branches are kept.',
@@ -229,293 +219,6 @@ const PROFILE_PLUGIN_REMOTE = {
       ),
     },
   ],
-}
-
-export function pinnedSessionOrder(sessionIds, pinnedIds) {
-  const sessions = new Set(sessionIds)
-  const pinned = pinnedIds.filter((id, index) => sessions.has(id) && pinnedIds.indexOf(id) === index)
-  const pinnedSet = new Set(pinned)
-  return [...pinned, ...sessionIds.filter(id => !pinnedSet.has(id))]
-}
-
-export function syncPinnedSessionOrder(context, pinnedIds) {
-  if (typeof context?.setSessionOrder !== 'function' || typeof context?.accountKey !== 'string') return false
-  const current = context.sessionOrderByAccount?.[context.accountKey]
-  if (!Array.isArray(current)) return false
-  const next = pinnedSessionOrder(current, pinnedIds)
-  if (next.length === current.length && next.every((id, index) => id === current[index])) return false
-  context.setSessionOrder(context.accountKey, next)
-  return true
-}
-
-export function readPinnedSessionIds(storage = window.localStorage) {
-  try {
-    const parsed = JSON.parse(storage.getItem(PINNED_STORAGE_KEY) ?? '[]')
-    if (!Array.isArray(parsed)) return []
-    return parsed.filter((id, index) => (
-      typeof id === 'string' && id.trim() !== '' && parsed.indexOf(id) === index
-    ))
-  } catch {
-    return []
-  }
-}
-
-export function writePinnedSessionIds(storage, pinnedIds) {
-  try {
-    storage.setItem(PINNED_STORAGE_KEY, JSON.stringify(pinnedIds))
-    return true
-  } catch {
-    return false
-  }
-}
-
-export function sessionContextFromElement(element) {
-  const key = Object.getOwnPropertyNames(element).find(name => name.startsWith('__reactFiber$'))
-  let fiber = key === undefined ? undefined : element[key]
-  let sessionId
-  let title
-  let archiveSession
-  let sessionOrderByAccount
-  let setSessionOrder
-  let workspaces
-  for (let depth = 0; fiber !== undefined && fiber !== null && depth < 64; depth += 1) {
-    const props = fiber.memoizedProps
-    const candidateId = props?.node?.id
-    if (sessionId === undefined && typeof candidateId === 'string' && candidateId.trim() !== '') {
-      sessionId = candidateId
-      title = props.node.title
-    }
-    if (archiveSession === undefined && typeof props?.archiveSession === 'function') {
-      archiveSession = props.archiveSession
-    }
-    if (setSessionOrder === undefined
-      && typeof props?.setSessionOrder === 'function'
-      && typeof props?.sessionOrderByAccount === 'object') {
-      sessionOrderByAccount = props.sessionOrderByAccount
-      setSessionOrder = props.setSessionOrder
-      workspaces = props.workspaces
-    }
-    fiber = fiber.return
-  }
-  // DSH 0.2.0 keeps the session id in the DOM row key and no longer exposes
-  // `node.id` on the row fiber, so fall back to the attribute when the walk
-  // above found nothing. 0.1.5 rows keep using the fiber path.
-  if (sessionId === undefined && typeof element.getAttribute === 'function') {
-    const rowKey = element.getAttribute('data-row-key')
-    if (typeof rowKey === 'string' && rowKey.startsWith('session:')) sessionId = rowKey.slice('session:'.length)
-  }
-  if (sessionId === undefined) return undefined
-  const workspace = Array.isArray(workspaces)
-    ? workspaces.find(item => item?.sessionIds?.includes(sessionId))
-    : undefined
-  return {
-    sessionId,
-    title: typeof title === 'string' ? title : sessionId,
-    archiveSession,
-    sessionOrderByAccount,
-    setSessionOrder,
-    workspaces,
-    accountKey: Array.isArray(workspaces) ? (workspace?.workspaceId ?? '') : FLAT_SESSION_ORDER_KEY,
-  }
-}
-
-function svgElement(documentApi, name, attributes) {
-  const element = documentApi.createElementNS('http://www.w3.org/2000/svg', name)
-  for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, value)
-  return element
-}
-
-function quickActionIcon(documentApi, kind, active = false) {
-  const svg = svgElement(documentApi, 'svg', {
-    width: '16', height: '16', viewBox: '0 0 16 16', fill: 'none', 'aria-hidden': 'true',
-  })
-  if (kind === 'pin') {
-    svg.appendChild(svgElement(documentApi, 'path', {
-      d: 'M5.2 2.5h5.6l-.9 3.2 1.8 1.8v1H8.8V13L8 14l-.8-1V8.5H4.3v-1l1.8-1.8-.9-3.2Z',
-      fill: active ? 'currentColor' : 'none', stroke: 'currentColor', 'stroke-width': '1.3',
-      'stroke-linecap': 'round', 'stroke-linejoin': 'round',
-    }))
-    return svg
-  }
-  svg.appendChild(svgElement(documentApi, 'path', {
-    d: kind === 'delete' ? 'M3 4h10M6 4V2.5h4V4M4 4l.6 9h6.8l.6-9M6.5 6.5v4M9.5 6.5v4' : 'M2.5 4.5h11M3.5 4.5l.8-2h7.4l.8 2v7.5a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1V4.5ZM6 7.5h4',
-    stroke: 'currentColor', 'stroke-width': '1.3', 'stroke-linecap': 'round', 'stroke-linejoin': 'round',
-  }))
-  return svg
-}
-
-export function mountSessionQuickActions(row, context, pinnedIds, t, onTogglePin, onRequestDelete) {
-  if (typeof context?.archiveSession !== 'function') return false
-  const nativeButton = row.querySelector('button')
-  if (nativeButton === null) return false
-  let actionHost = nativeButton.parentElement
-  while (actionHost !== null && actionHost.parentElement !== row) actionHost = actionHost.parentElement
-  if (actionHost === null) return false
-
-  const documentApi = row.ownerDocument ?? document
-  const pinned = pinnedIds.includes(context.sessionId)
-  row.classList.add('dsh-ui-enhancements-row')
-  actionHost.classList.add('dsh-ui-enhancements-row-actions-host')
-  actionHost.previousElementSibling?.classList.add('dsh-ui-enhancements-row-time')
-
-  const existing = actionHost.querySelector('[data-dsh-ui-enhancements-actions]')
-  if (existing !== null) {
-    if (existing.currentContext.sessionId !== context.sessionId) existing.children[1].disabled = false
-    existing.currentContext = context
-    existing.onRequestDelete = onRequestDelete
-    existing.onTogglePin = onTogglePin
-    const pin = existing.children[0]
-    const archive = existing.children[1]
-    const pinChanged = pin.getAttribute('aria-pressed') !== String(pinned)
-    pin.setAttribute('aria-pressed', String(pinned))
-    const pinLabel = t(pinned ? 'unpin.aria' : 'pin.aria', { title: context.title })
-    pin.setAttribute('aria-label', pinLabel)
-    pin.setAttribute('title', pinLabel)
-    if (pinChanged) pin.replaceChildren(quickActionIcon(documentApi, 'pin', pinned))
-    const archiveLabel = t('archive.aria', { title: context.title })
-    archive.setAttribute('aria-label', archiveLabel)
-    archive.setAttribute('title', archiveLabel)
-    if (existing.children[2]) {
-      const label = t('delete.aria', { title: context.title })
-      existing.children[2].setAttribute('aria-label', label)
-      existing.children[2].setAttribute('title', label)
-    }
-    return true
-  }
-
-  const actions = documentApi.createElement('span')
-  actions.classList.add('dsh-ui-enhancements-row-actions')
-  actions.setAttribute('data-dsh-ui-enhancements-actions', context.sessionId)
-  actions.currentContext = context
-  actions.onRequestDelete = onRequestDelete
-  actions.onTogglePin = onTogglePin
-
-  const pin = documentApi.createElement('button')
-  pin.setAttribute('type', 'button')
-  pin.classList.add('dsh-ui-enhancements-row-action')
-  pin.setAttribute('data-dsh-ui-enhancements-action', 'pin')
-  pin.setAttribute('aria-pressed', String(pinned))
-  const pinLabel = t(pinned ? 'unpin.aria' : 'pin.aria', { title: context.title })
-  pin.setAttribute('aria-label', pinLabel)
-  pin.setAttribute('title', pinLabel)
-  pin.appendChild(quickActionIcon(documentApi, 'pin', pinned))
-  pin.addEventListener('click', (event) => {
-    event.preventDefault()
-    event.stopPropagation()
-    actions.onTogglePin(actions.currentContext.sessionId)
-  })
-
-  const archive = documentApi.createElement('button')
-  archive.setAttribute('type', 'button')
-  archive.classList.add('dsh-ui-enhancements-row-action')
-  archive.setAttribute('data-dsh-ui-enhancements-action', 'archive')
-  const archiveLabel = t('archive.aria', { title: context.title })
-  archive.setAttribute('aria-label', archiveLabel)
-  archive.setAttribute('title', archiveLabel)
-  archive.appendChild(quickActionIcon(documentApi, 'archive'))
-  archive.addEventListener('click', async (event) => {
-    event.preventDefault()
-    event.stopPropagation()
-    if (archive.disabled) return
-    archive.disabled = true
-    try {
-      await actions.currentContext.archiveSession(actions.currentContext.sessionId)
-    } catch {
-      archive.disabled = false
-      archive.dataset.status = 'failed'
-      archive.setAttribute('title', t('archive.failed'))
-    }
-  })
-
-  actions.append(pin, archive)
-  if (typeof onRequestDelete === 'function') {
-    const deletion = documentApi.createElement('button')
-    deletion.setAttribute('type', 'button')
-    deletion.classList.add('dsh-ui-enhancements-row-action')
-    deletion.setAttribute('data-dsh-ui-enhancements-action', 'delete')
-    const label = t('delete.aria', { title: context.title })
-    deletion.setAttribute('aria-label', label)
-    deletion.setAttribute('title', label)
-    deletion.appendChild(quickActionIcon(documentApi, 'delete'))
-    deletion.addEventListener('click', event => {
-      event.preventDefault()
-      event.stopPropagation()
-      const { sessionId, title } = actions.currentContext
-      actions.onRequestDelete?.({ sessionId, title })
-    })
-    actions.appendChild(deletion)
-  }
-  actionHost.insertBefore(actions, actionHost.firstChild)
-  return true
-}
-
-export function installSessionQuickActions(
-  t,
-  browser = window,
-  documentApi = document,
-  Observer = globalThis.MutationObserver,
-  onRequestDelete,
-  services = {},
-) {
-  let pinnedIds = readPinnedSessionIds(browser.localStorage)
-  let timer
-
-  const sync = () => {
-    const seen = new Map()
-    for (const row of documentApi.querySelectorAll('[role="treeitem"]')) {
-      const found = sessionContextFromElement(row)
-      if (found === undefined) continue
-      // DSH 0.2.0 rows no longer carry `archiveSession` on the fiber; take it
-      // from the client service so the hover actions stay available.
-      const context = {
-        ...found,
-        archiveSession: typeof found.archiveSession === 'function' ? found.archiveSession : services.archiveSession,
-      }
-      if (typeof context.archiveSession !== 'function') continue
-      mountSessionQuickActions(row, context, pinnedIds, t, togglePin, onRequestDelete)
-      if (typeof context.setSessionOrder !== 'function') continue
-      let accounts = seen.get(context.setSessionOrder)
-      if (accounts === undefined) {
-        accounts = new Set()
-        seen.set(context.setSessionOrder, accounts)
-      }
-      if (accounts.has(context.accountKey)) continue
-      accounts.add(context.accountKey)
-      syncPinnedSessionOrder(context, pinnedIds)
-    }
-  }
-
-  const togglePin = (sessionId) => {
-    const next = pinnedIds.includes(sessionId)
-      ? pinnedIds.filter(id => id !== sessionId)
-      : [sessionId, ...pinnedIds]
-    if (!writePinnedSessionIds(browser.localStorage, next)) return
-    pinnedIds = next
-    sync()
-  }
-
-  const schedule = () => {
-    if (timer !== undefined) return
-    timer = setTimeout(() => {
-      timer = undefined
-      sync()
-    }, 0)
-  }
-  const observer = typeof Observer === 'function' ? new Observer(schedule) : undefined
-  observer?.observe(documentApi.body, { childList: true, subtree: true })
-  const onStorage = (event) => {
-    if (event.key !== null && event.key !== PINNED_STORAGE_KEY) return
-    pinnedIds = readPinnedSessionIds(browser.localStorage)
-    sync()
-  }
-  browser.addEventListener?.('storage', onStorage)
-  sync()
-
-  return () => {
-    if (timer !== undefined) clearTimeout(timer)
-    observer?.disconnect()
-    browser.removeEventListener?.('storage', onStorage)
-  }
 }
 
 function syncPluginToggle(button, plugin, t) {
@@ -660,65 +363,58 @@ export function installStyles(documentApi = document) {
   const style = documentApi.createElement('style')
   style.id = STYLE_ID
   style.textContent = `
-.dsh-ui-enhancements-row-actions-host {
-  display: inline-flex !important;
-  align-items: center;
-  gap: 4px !important;
-  width: 0;
-  opacity: 0;
-  overflow: hidden;
-  pointer-events: none;
-  transition: opacity 120ms var(--ds-ease-in-out);
+.dsh-ui-enhancements-menu-row {
+  position: relative;
 }
-.dsh-ui-enhancements-row:hover .dsh-ui-enhancements-row-actions-host,
-.dsh-ui-enhancements-row:focus-within .dsh-ui-enhancements-row-actions-host {
-  width: auto;
-  opacity: 1;
-  overflow: visible;
-  pointer-events: auto;
+.dsh-ui-enhancements-menu-separator {
+  height: .5px;
+  margin: 3px 2px;
+  background: var(--dsw-alias-border-l2);
 }
-.dsh-ui-enhancements-row:hover .dsh-ui-enhancements-row-time,
-.dsh-ui-enhancements-row:focus-within .dsh-ui-enhancements-row-time { display: none; }
-.dsh-ui-enhancements-row-actions {
-  display: inline-flex;
+/* The delete row reads as a shipped menu row: same cell metrics and focus
+   fill, with the destructive colors the menu uses for danger rows. */
+.dsh-ui-enhancements-menu-item {
+  display: flex;
   align-items: center;
-  gap: 2px;
-}
-.dsh-ui-enhancements-row-action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  padding: 0;
+  gap: 6px;
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 8px;
   border: none;
-  border-radius: 6px;
-  color: var(--dsw-alias-label-tertiary);
+  border-radius: var(--dsw-radius-md);
   background: transparent;
+  color: var(--dsw-alias-state-error-primary);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  text-align: left;
   cursor: pointer;
 }
-.dsh-ui-enhancements-row-action:hover { color: var(--dsw-alias-label-primary); }
-.dsh-ui-enhancements-row-action[data-dsh-ui-enhancements-action="delete"]:hover { color: var(--dsw-alias-state-error-primary); }
-${ARCHIVE_STYLES}
-.dsh-ui-enhancements-row-action:focus-visible {
-  outline: 2px solid var(--dsw-alias-label-primary-bluish);
-  outline-offset: 1px;
+.dsh-ui-enhancements-menu-item:hover,
+.dsh-ui-enhancements-menu-item:focus-visible {
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+  outline: none;
 }
-.dsh-ui-enhancements-row-action[aria-pressed="true"] {
-  color: var(--dsw-alias-state-business-primary);
-}
-.dsh-ui-enhancements-row-action:disabled {
-  opacity: .45;
-  cursor: default;
-}
-.dsh-ui-enhancements-row-action[data-status="failed"] {
-  color: var(--dsw-alias-label-error);
-}
-.dsh-ui-enhancements-row-action svg {
-  width: 16px;
-  height: 16px;
+.dsh-ui-enhancements-menu-icon {
+  display: inline-flex;
   flex: none;
+  width: 14px;
+  height: 14px;
+  align-items: center;
+  justify-content: center;
 }
+.dsh-ui-enhancements-menu-icon svg {
+  width: 14px;
+  height: 14px;
+}
+.dsh-ui-enhancements-menu-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+${ARCHIVE_STYLES}
 .dsh-ui-enhancements-plugin-card {
   position: relative;
 }
@@ -789,18 +485,9 @@ ${ARCHIVE_STYLES}
 .dsh-ui-enhancements-plugin-toggle[data-status="pending"] { opacity: .65; }
 .dsh-ui-enhancements-plugin-toggle[data-status="failed"] { color: var(--dsw-alias-label-error); }
 @media (hover: none) and (pointer: coarse) {
-  .dsh-ui-enhancements-row { min-height: 48px; }
-  .dsh-ui-enhancements-row-action { width: 44px; height: 44px; }
-  .dsh-ui-enhancements-row .dsh-ui-enhancements-row-actions-host {
-    width: auto;
-    opacity: 1;
-    overflow: visible;
-    pointer-events: auto;
-  }
-  .dsh-ui-enhancements-row .dsh-ui-enhancements-row-time { display: none; }
+  .dsh-ui-enhancements-menu-item { min-height: 44px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .dsh-ui-enhancements-row-actions-host,
   .dsh-ui-enhancements-plugin-toggle-thumb { transition: none; }
 }
 `
@@ -860,9 +547,7 @@ export function apply(ctx) {
         if (!result.ok) throw new Error(result.error.message)
         return result.value
       }, ctx.locale.bind(NS)))
-      cleanups.push(installSessionQuickActions(ctx.locale.bind(NS), window, document, globalThis.MutationObserver, target => manager.confirmDelete(target), {
-        archiveSession: sessionId => ctx.uiWorkspace.archiveSession(sessionId),
-      }))
+      cleanups.push(registerSessionDeleteEntry(ctx, manager, ctx.locale.bind(NS)))
       cleanups.push(installProjectlessIcons(ctx.locale.bind(NS), window, document, globalThis.MutationObserver))
       return async () => {
         for (const cleanup of cleanups.reverse()) cleanup()

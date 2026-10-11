@@ -105,171 +105,73 @@ function pluginCard() {
   return { card, header }
 }
 
-function quickActionRow() {
-  const documentApi = {
-    createElement: tag => actionElement(tag),
-    createElementNS: (_namespace, tag) => actionElement(tag),
-  }
-  const row = actionElement('div')
-  row.ownerDocument = documentApi
-  const time = actionElement('span')
-  const actionHost = actionElement('span')
-  const menuRoot = actionElement('span')
-  menuRoot.appendChild(actionElement('button'))
-  actionHost.appendChild(menuRoot)
-  row.append(time, actionHost)
-  return { row, time, actionHost }
+// The menu row renders through React, so these tests drive it with a plain
+// element tree instead of a DOM: createElement returns inspectable nodes.
+function fakeCreateElement(type, props, ...children) {
+  return { type, props: props ?? {}, children }
 }
 
-test('pinned sessions stay first without disturbing the remaining order', async () => {
+test('the row menu carries one delete entry that closes the menu before asking', async () => {
   const client = await loadClient()
-
-  assert.equal(typeof client.pinnedSessionOrder, 'function')
-  assert.deepEqual(
-    client.pinnedSessionOrder(
-      ['session-a', 'session-b', 'session-c', 'session-d'],
-      ['session-d', 'session-b', 'session-missing'],
-    ),
-    ['session-d', 'session-b', 'session-a', 'session-c'],
-  )
-})
-
-test('pin persistence keeps unique non-empty session IDs and reports denied writes', async () => {
-  const client = await loadClient()
-  const storage = {
-    value: JSON.stringify(['session-b', '', 'session-b', 42, 'session-a']),
-    getItem() { return this.value },
-    setItem(_key, value) { this.value = value },
-  }
-
-  assert.equal(typeof client.readPinnedSessionIds, 'function')
-  assert.deepEqual(client.readPinnedSessionIds(storage), ['session-b', 'session-a'])
-  assert.equal(client.writePinnedSessionIds(storage, ['session-a']), true)
-  assert.deepEqual(JSON.parse(storage.value), ['session-a'])
-  assert.deepEqual(client.readPinnedSessionIds({ getItem: () => '{' }), [])
-  assert.equal(client.writePinnedSessionIds({ setItem() { throw new Error('denied') } }, ['session-a']), false)
-})
-
-test('session row context resolves workspace and flat-list ordering owners', async () => {
-  const client = await loadClient()
-  const archiveSession = async () => {}
-  const setSessionOrder = () => {}
-  const grouped = {}
-  Object.defineProperty(grouped, '__reactFiber$test', {
-    value: {
-      memoizedProps: { node: { id: 'session-row', title: 'Pinned row' } },
-      return: {
-        memoizedProps: {
-          sessionOrderByAccount: { 'workspace-1': ['session-other', 'session-row'] },
-          setSessionOrder,
-          workspaces: [{ workspaceId: 'workspace-1', sessionIds: ['session-other', 'session-row'] }],
-        },
-        return: { memoizedProps: { archiveSession }, return: null },
-      },
-    },
-  })
-  const flat = {}
-  Object.defineProperty(flat, '__reactFiber$test', {
-    value: {
-      memoizedProps: { node: { id: 'session-flat', title: 'Flat row' } },
-      return: {
-        memoizedProps: {
-          sessionOrderByAccount: { '__flat_session_order__': ['session-flat'] },
-          setSessionOrder,
-        },
-        return: { memoizedProps: { archiveSession }, return: null },
-      },
-    },
-  })
-
-  assert.equal(typeof client.sessionContextFromElement, 'function')
-  assert.deepEqual(client.sessionContextFromElement(grouped), {
-    sessionId: 'session-row',
-    title: 'Pinned row',
-    archiveSession,
-    sessionOrderByAccount: { 'workspace-1': ['session-other', 'session-row'] },
-    setSessionOrder,
-    workspaces: [{ workspaceId: 'workspace-1', sessionIds: ['session-other', 'session-row'] }],
-    accountKey: 'workspace-1',
-  })
-  assert.equal(client.sessionContextFromElement(flat).accountKey, '__flat_session_order__')
-})
-
-test('pin sync writes one changed DSH order and skips an already pinned order', async () => {
-  const client = await loadClient()
-  const writes = []
-  const context = {
-    accountKey: 'workspace-1',
-    sessionOrderByAccount: { 'workspace-1': ['session-a', 'session-b', 'session-c'] },
-    setSessionOrder(accountKey, order) { writes.push({ accountKey, order }) },
-  }
-
-  assert.equal(typeof client.syncPinnedSessionOrder, 'function')
-  assert.equal(client.syncPinnedSessionOrder(context, ['session-b']), true)
-  assert.deepEqual(writes, [{
-    accountKey: 'workspace-1',
-    order: ['session-b', 'session-a', 'session-c'],
-  }])
-  context.sessionOrderByAccount['workspace-1'] = writes[0].order
-  assert.equal(client.syncPinnedSessionOrder(context, ['session-b']), false)
-  assert.equal(writes.length, 1)
-})
-
-test('row quick actions expose pin state and reuse the native archive action', async () => {
-  const client = await loadClient()
-  const { row, time, actionHost } = quickActionRow()
-  const toggled = []
-  const archived = []
-  const context = {
-    sessionId: 'session-row',
-    title: 'Pinned row',
-    async archiveSession(sessionId) { archived.push(sessionId) },
-  }
-  const t = (key, params = {}) => `${key}:${params.title ?? ''}`
-
-  assert.equal(typeof client.mountSessionQuickActions, 'function')
-  assert.equal(client.mountSessionQuickActions(
-    row,
-    context,
-    ['session-row'],
-    t,
-    sessionId => { toggled.push(sessionId) },
-  ), true)
-
-  const actions = row.querySelector('[data-dsh-ui-enhancements-actions]')
-  const [pin, archive] = actions.children
-  assert.equal(pin.getAttribute('aria-pressed'), 'true')
-  assert.equal(pin.getAttribute('aria-label'), 'unpin.aria:Pinned row')
-  assert.equal(archive.getAttribute('aria-label'), 'archive.aria:Pinned row')
-  assert.equal(actionHost.classList.contains('dsh-ui-enhancements-row-actions-host'), true)
-  assert.equal(time.classList.contains('dsh-ui-enhancements-row-time'), true)
-
-  const pinEvent = await pin.dispatch('click')
-  const archiveEvent = await archive.dispatch('click')
-  assert.equal(pinEvent.defaultPrevented, true)
-  assert.equal(pinEvent.propagationStopped, true)
-  assert.equal(archiveEvent.defaultPrevented, true)
-  assert.equal(archiveEvent.propagationStopped, true)
-  assert.deepEqual(toggled, ['session-row'])
-  assert.deepEqual(archived, ['session-row'])
-})
-
-test('immediate delete requests confirmation for the latest row identity without archiving', async () => {
-  const client = await loadClient()
-  const { row } = quickActionRow()
   const requests = []
-  let archives = 0
-  const context = { sessionId: 'original', title: 'Original', async archiveSession() { archives++ } }
-  const requestDelete = value => requests.push(value)
-  client.mountSessionQuickActions(row, context, [], key => key, () => {}, requestDelete)
-  const actions = row.querySelector('[data-dsh-ui-enhancements-actions]')
-  const deletion = actions.children.find(button => button.getAttribute('data-dsh-ui-enhancements-action') === 'delete')
-  assert.ok(deletion, 'an immediate delete action is available beside archive')
-  client.mountSessionQuickActions(row, { ...context, sessionId: 'replacement', title: 'New title' }, [], key => key, () => {}, requestDelete)
-  const event = await deletion.dispatch('click')
-  assert.equal(event.propagationStopped, true)
-  assert.deepEqual(requests, [{ sessionId: 'replacement', title: 'New title' }])
-  assert.equal(archives, 0)
+  const menuState = []
+  const t = (key, params = {}) => `${key}:${params.title ?? ''}`
+  const component = client.createDeleteMenuItem(
+    fakeCreateElement,
+    { confirmDelete: target => requests.push(target) },
+    t,
+  )
+  const row = component({
+    sessionId: 'session-row',
+    displayTitle: 'Row title',
+    useMenuOpenState: () => [true, open => menuState.push(open)],
+  })
+  const [separator, button] = row.children
+
+  assert.equal(row.type, 'div')
+  assert.equal(separator.props.role, 'separator')
+  assert.equal(button.type, 'button')
+  assert.equal(button.props.role, 'menuitem')
+  assert.equal(button.props.className, 'dsh-ui-enhancements-menu-item')
+  assert.equal(button.children.at(-1).children[0], 'delete.action:')
+
+  button.props.onClick()
+  assert.deepEqual(menuState, [false])
+  assert.deepEqual(requests, [{ sessionId: 'session-row', title: 'Row title' }])
+})
+
+test('the delete entry still renders when the slot omits the menu hook', async () => {
+  const client = await loadClient()
+  const component = client.createDeleteMenuItem(fakeCreateElement, { confirmDelete() {} }, key => key)
+  const row = component({ sessionId: 'session-row', displayTitle: 'Row title' })
+  const button = row.children.find(child => child.props.role === 'menuitem')
+
+  assert.equal(typeof button.props.onClick, 'function')
+  assert.doesNotThrow(() => button.props.onClick())
+})
+
+test('the delete entry registers into the shipped session menu list', async () => {
+  const client = await loadClient()
+  const injected = []
+  const registered = []
+  const ctx = {
+    slots: {
+      inject(key, setup) { injected.push(key); return setup() },
+      register(options, component) { registered.push({ options, component }); return () => {} },
+    },
+  }
+
+  const cleanup = client.registerSessionDeleteEntry(ctx, { confirmDelete() {} }, key => key, fakeCreateElement)
+
+  assert.deepEqual(injected, ['sidebar.workspaces.session.menu.item'])
+  assert.deepEqual(registered[0].options, {
+    name: 'sidebar.workspaces.session.menu.item',
+    id: 'dsh-ui-enhancements#delete',
+    order: 500,
+    locale: 'dsh-ui-enhancements',
+  })
+  assert.equal(typeof registered[0].component, 'function')
+  cleanup()
 })
 
 test('delete dialog waits for confirmation, preserves itself on failure, and supports retry', async () => {
@@ -416,114 +318,6 @@ test('plugin toggle inventory failure is reported without breaking the page', as
   }
 })
 
-test('refreshing an unchanged row reuses action DOM and updates renamed labels', async () => {
-  const client = await loadClient()
-  const { row, actionHost } = quickActionRow()
-  const t = (key, params = {}) => `${key}:${params.title ?? ''}`
-  const context = {
-    sessionId: 'session-row',
-    title: 'Draft title',
-    async archiveSession() {},
-  }
-
-  client.mountSessionQuickActions(row, context, [], t, () => {})
-  const actions = row.querySelector('[data-dsh-ui-enhancements-actions]')
-  const [pin, archive] = actions.children
-  const originalPinIcon = pin.children[0]
-
-  client.mountSessionQuickActions(row, { ...context, title: 'Final title' }, [], t, () => {})
-
-  assert.equal(actionHost.children.filter(child => (
-    child.hasAttribute('data-dsh-ui-enhancements-actions')
-  )).length, 1)
-  assert.equal(pin.children[0], originalPinIcon)
-  assert.equal(pin.getAttribute('aria-label'), 'pin.aria:Final title')
-  assert.equal(archive.getAttribute('aria-label'), 'archive.aria:Final title')
-})
-
-test('failed archive restores the button and exposes a retryable error state', async () => {
-  const client = await loadClient()
-  const { row } = quickActionRow()
-  const context = {
-    sessionId: 'session-row',
-    title: 'Archive failure',
-    async archiveSession() { throw new Error('offline') },
-  }
-  client.mountSessionQuickActions(row, context, [], key => key, () => {})
-  const archive = row.querySelector('[data-dsh-ui-enhancements-actions]').children[1]
-  let rejection
-  try {
-    await archive.dispatch('click')
-  } catch (reason) {
-    rejection = reason
-  }
-
-  assert.equal(rejection, undefined)
-  assert.equal(archive.disabled, false)
-  assert.equal(archive.dataset.status, 'failed')
-  assert.equal(archive.getAttribute('title'), 'archive.failed')
-})
-
-test('installer restores pinned rows and watches React list changes', async () => {
-  const client = await loadClient()
-  const { row } = quickActionRow()
-  const writes = []
-  const setSessionOrder = (accountKey, order) => { writes.push({ accountKey, order }) }
-  Object.defineProperty(row, '__reactFiber$test', {
-    value: {
-      memoizedProps: { node: { id: 'session-row', title: 'Pinned row' } },
-      return: {
-        memoizedProps: {
-          sessionOrderByAccount: { 'workspace-1': ['session-other', 'session-row'] },
-          setSessionOrder,
-          workspaces: [{ workspaceId: 'workspace-1', sessionIds: ['session-other', 'session-row'] }],
-        },
-        return: { memoizedProps: { async archiveSession() {} }, return: null },
-      },
-    },
-  })
-  const storage = {
-    getItem: () => JSON.stringify(['session-row']),
-    setItem() {},
-  }
-  const browser = {
-    localStorage: storage,
-    addEventListener() {},
-    removeEventListener() {},
-  }
-  const documentApi = {
-    body: {},
-    querySelectorAll: selector => selector === '[role="treeitem"]' ? [row] : [],
-  }
-  let observed
-  let disconnected = false
-  class FakeMutationObserver {
-    constructor(callback) { this.callback = callback }
-    observe(target, options) { observed = { target, options } }
-    disconnect() { disconnected = true }
-  }
-
-  assert.equal(typeof client.installSessionQuickActions, 'function')
-  const cleanup = client.installSessionQuickActions(
-    (key, params = {}) => `${key}:${params.title ?? ''}`,
-    browser,
-    documentApi,
-    FakeMutationObserver,
-  )
-
-  assert.ok(row.querySelector('[data-dsh-ui-enhancements-actions]'))
-  assert.deepEqual(writes, [{
-    accountKey: 'workspace-1',
-    order: ['session-row', 'session-other'],
-  }])
-  assert.deepEqual(observed, {
-    target: documentApi.body,
-    options: { childList: true, subtree: true },
-  })
-  cleanup()
-  assert.equal(disconnected, true)
-})
-
 test('installed styles reveal quick actions on hover, focus, and coarse pointers', async () => {
   const client = await loadClient()
   let appended
@@ -536,8 +330,9 @@ test('installed styles reveal quick actions on hover, focus, and coarse pointers
 
   assert.equal(typeof client.installStyles, 'function')
   const cleanup = client.installStyles(documentApi)
-  assert.match(appended.textContent, /\.dsh-ui-enhancements-row:hover/)
-  assert.match(appended.textContent, /focus-within/)
+  assert.match(appended.textContent, /\.dsh-ui-enhancements-menu-item/)
+  assert.match(appended.textContent, /\.dsh-ui-enhancements-menu-separator/)
+  assert.match(appended.textContent, /var\(--dsw-alias-interactive-bg-hover-danger\)/)
   assert.match(appended.textContent, /@media \(hover: none\) and \(pointer: coarse\)/)
   cleanup()
   assert.equal(removed, true)
@@ -555,6 +350,8 @@ test('client apply registers bilingual copy and starts the sidebar enhancer', as
   const effects = []
   const remoteMounts = []
   const serviceLookups = []
+  const slotKeys = []
+  const slotRegistrations = []
   let observed = false
   globalThis.window = {
     localStorage: { getItem: () => null, setItem() {} },
@@ -574,7 +371,15 @@ test('client apply registers bilingual copy and starts the sidebar enhancer', as
   }
   const ctx = {
     inject() {},
-    slots: { inject: () => () => {} },
+    slots: {
+      // Only the session menu is mounted here: the other registrations in
+      // `apply` need the fuller slot registry the browser provides.
+      inject(key, setup) {
+        slotKeys.push(key)
+        return key === 'sidebar.workspaces.session.menu.item' ? setup() : () => {}
+      },
+      register(options) { slotRegistrations.push(options); return () => {} },
+    },
     uiWorkspace: { connectWorkspace() {}, startSession() {} },
     get(service) {
       serviceLookups.push(service)
@@ -611,8 +416,13 @@ test('client apply registers bilingual copy and starts the sidebar enhancer', as
     client.apply(ctx)
     await Promise.all(effects)
     assert.equal(registrations[0].namespace, 'dsh-ui-enhancements')
-    assert.equal(registrations[0].dictionaries.zh['pin.aria'], '置顶会话“{title}”')
-    assert.equal(registrations[0].dictionaries.en['archive.aria'], 'Archive session “{title}”')
+    assert.equal(registrations[0].dictionaries.zh['delete.action'], '立即删除')
+    assert.equal(registrations[0].dictionaries.en['delete.action'], 'Delete now')
+    assert.ok(slotKeys.includes('sidebar.workspaces.session.menu.item'), 'the delete entry targets the shipped row menu')
+    assert.ok(
+      slotRegistrations.some(options => options.id === 'dsh-ui-enhancements#delete'),
+      'the delete entry is registered while the plugin is applied',
+    )
     assert.deepEqual(
       remoteMounts[0].descriptors.map(descriptor => descriptor.method),
       ['list', 'setEnabled', 'listArchived', 'resolveArchivedTitles', 'readArchived', 'restore', 'delete', 'info', 'prepare'],
