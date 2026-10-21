@@ -38,7 +38,7 @@
 - DSH 内置运行组件仍然只读，因为停用核心服务可能导致 Web 界面或插件管理器不可用。
 - 如果运行时更新失败，插件会恢复原有持久化状态，开关仍可重试。
 
-`0.7.0` 版本需要 DSH `0.2.0-rc.2`。安装或升级后请重启 DSH，以便宿主端与浏览器端代码同时重新加载。
+`0.7.1` 版本需要 DSH `0.2.0-rc.2`。安装或升级后请重启 DSH，以便宿主端与浏览器端代码同时重新加载。
 
 ### 会话行菜单里的删除
 
@@ -84,7 +84,7 @@ DSH `0.2.0-rc.2` 没有原生的恢复和删除接口，本版本复用其工作
 ## 安装
 
 ```sh
-dsh plugin --profile web add github:Unintendedz/dsh-ui-enhancements#v0.7.0
+dsh plugin --profile web add github:Unintendedz/dsh-ui-enhancements#v0.7.1
 ```
 
 安装或卸载后请重启 DSH Web 服务。

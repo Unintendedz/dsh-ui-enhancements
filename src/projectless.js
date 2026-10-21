@@ -162,7 +162,11 @@ export function registerProjectless(ctx, root, prepare, t) {
   const start = navigation.startSession
   const connectWrapper = function (id) { return id === VIRTUAL_WORKSPACE ? drafts.connect() : connect.call(this, id) }
   const startWrapper = function (id) {
-    if (id !== undefined) return start.call(this, id)
+    // The No workspace group's create button forwards its group's workspace id,
+    // and that id is the client-only virtual workspace: the Host registry has no
+    // entry for it, so forwarding it fails with `workspace/not-found`. Route it
+    // to the managed conversation instead, exactly like New Session.
+    if (id !== undefined && id !== VIRTUAL_WORKSPACE) return start.call(this, id)
     // DSH 0.2.0 removed `navigation.sessions.clear()`. Calling it threw inside the
     // click handler, which is why New Session and its shortcut did nothing at all.
     // Start the managed workspace-less conversation instead.

@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import * as host from '../lib/index.js'
 import * as client from '../src/client.js'
+import { registerProjectless } from '../src/projectless.js'
 
 const one = '9c8a7d63-86fd-40da-a2c4-e41288a39850'
 const two = '77777777-86fd-40da-a2c4-e41288a39850'
@@ -124,4 +125,73 @@ test('the virtual workspace never claims real workspaces as tree children', () =
   assert.equal(owns(record.path, '/Users/x/projects/security/turnitin'), false)
   assert.equal(owns(record.path, record.path + '/session-projectless-' + one), true, 'it still owns the managed conversations')
   assert.deepEqual(record.sessionIds, ['session-projectless-' + one])
+})
+
+function registrationFixture() {
+  const created = []
+  const forwarded = []
+  const byId = {}
+  const root = '/synthetic/projectless'
+  const react = {
+    createElement() {}, Fragment: 'Fragment',
+    useEffect() {}, useState() {}, useMemo() {}, useCallback() {},
+  }
+  const previous = { require: globalThis.require, window: globalThis.window }
+  const navigation = {
+    connectWorkspace(id) { forwarded.push(id) },
+    startSession(id) { forwarded.push(id) },
+    async openSession() {},
+  }
+  const ctx = {
+    uiWorkspace: navigation,
+    sessions: {
+      list: { getSnapshot: () => ({ byId }) },
+      async create(data) {
+        created.push(data)
+        byId[data.sessionId] = { cwd: data.cwd, blank: true }
+        return data.sessionId
+      },
+    },
+    workspaces: { list: { getSnapshot: () => ({ items: [], archivedSessionIds: [] }) } },
+    slots: {
+      inject(key, setup) { return setup() },
+      entries() { return [{ options: {}, component: () => null }] },
+      register() { return () => {} },
+    },
+  }
+  globalThis.require = () => react
+  globalThis.window = { sessionStorage: { getItem: () => null, setItem() {} } }
+  const prepare = async id => ({ sessionId: 'session-projectless-' + id, cwd: root + '/session-projectless-' + id })
+  return {
+    ctx, navigation, created, forwarded, root, prepare,
+    restore() {
+      globalThis.require = previous.require
+      globalThis.window = previous.window
+    },
+  }
+}
+
+test('the No workspace group create button starts a managed conversation instead of forwarding its virtual id', async () => {
+  const f = registrationFixture()
+  const original = f.navigation.startSession
+  const dispose = registerProjectless(f.ctx, f.root, f.prepare, key => key)
+  try {
+    // Native group rows call `startSession(group.workspaceId)`. The No workspace
+    // group's id is the client-only virtual workspace, and the Host registry has
+    // no entry for it, so forwarding it failed with `workspace/not-found`.
+    const virtual = client.virtualWorkspaceRecord(f.root, 'No workspace').workspaceId
+    const started = await f.navigation.startSession(virtual)
+    assert.match(String(started), /^session-projectless-[0-9a-f-]{36}$/, 'the create button opens a managed conversation')
+    assert.deepEqual(f.forwarded, [], 'the virtual id never reaches the Host')
+    assert.equal(f.created.length, 1)
+    assert.equal(f.created[0].cwd, f.root + '/session-projectless-' + String(started).slice('session-projectless-'.length))
+
+    // Real workspaces still go straight to the Host.
+    await f.navigation.startSession('workspace-1')
+    assert.deepEqual(f.forwarded, ['workspace-1'])
+  } finally {
+    dispose()
+    f.restore()
+  }
+  assert.equal(f.navigation.startSession, original, 'unloading restores the native navigation')
 })

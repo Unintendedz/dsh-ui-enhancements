@@ -38,7 +38,7 @@ Open **Settings → Plugins → Plugin list** to enable or disable every plugin 
 - DSH's built-in runtime entries remain read-only because disabling core services can make the Web UI or plugin manager unavailable.
 - A failed runtime update restores the previous persistent state and leaves the switch retryable.
 
-Version `0.7.0` requires DSH `0.2.0-rc.2`. Restart DSH after installing or upgrading so the host and browser halves reload together.
+Version `0.7.1` requires DSH `0.2.0-rc.2`. Restart DSH after installing or upgrading so the host and browser halves reload together.
 
 ### Deleting from the session row menu
 
@@ -84,7 +84,7 @@ DSH `0.2.0-rc.2` has no native restore/delete API. This release uses its registr
 ## Install
 
 ```sh
-dsh plugin --profile web add github:Unintendedz/dsh-ui-enhancements#v0.7.0
+dsh plugin --profile web add github:Unintendedz/dsh-ui-enhancements#v0.7.1
 ```
 
 Restart the DSH Web service after installing or removing the plugin.
